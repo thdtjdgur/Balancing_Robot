@@ -35,6 +35,44 @@ While the HIL task is prioritized in the current code, the project is structured
 
 ---
 
+## Validation & Project Visuals
+
+The following materials summarize how the balancing robot was verified from simulation to hardware, and show the controller blocks used during development.
+
+### 1. Physical Robot and Simulation Model
+
+<p align="center">
+  <img src="docs/images/real_robot.png" alt="Physical self-balancing robot" width="45%" />
+  <img src="docs/images/sim_robot.png" alt="Simulation model of the self-balancing robot" width="45%" />
+</p>
+
+- **Physical robot**: Actual two-wheeled balancing robot platform used for firmware and controller testing.
+- **Simulation model**: Robot model used during controller development before full hardware verification.
+
+### 2. Controller Design
+
+<p align="center">
+  <img src="docs/images/angle_controller.png" alt="Angle controller block diagram" width="45%" />
+  <img src="docs/images/motor_controller.png" alt="Motor controller block diagram" width="45%" />
+</p>
+
+- **Angle controller**: Controller structure for stabilizing the robot posture.
+- **Motor controller**: Motor-side control block used to generate the actuation command.
+
+### 3. SILS Validation Result
+
+<p align="center">
+  <img src="docs/images/sils_test.png" alt="SILS test result for the balancing robot" width="70%" />
+</p>
+
+Before moving to physical testing, the control response was checked through SILS-based validation to confirm that the balancing controller behaved as expected under the designed conditions.
+
+### 4. Additional Evidence
+
+- [Balancing Robot Evidence PDF](docs/images/balancing_robot_evidence.pdf)
+
+---
+
 ## Hardware Components
 
 This project is designed to interface with the following components:
