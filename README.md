@@ -59,7 +59,15 @@ The following materials summarize how the balancing robot was verified from simu
 - **Angle controller**: Controller structure for stabilizing the robot posture.
 - **Motor controller**: Motor-side control block used to generate the actuation command.
 
-### 3. SILS Validation Result
+### 3. HILS Simulation Block Diagram
+
+<p align="center">
+  <img src="docs/images/hils_matlab_block.png" alt="MATLAB/Simulink block diagram for HILS validation" width="75%" />
+</p>
+
+This MATLAB/Simulink block diagram was used to connect the embedded controller with the simulation environment during HILS validation, making it possible to check the control flow and data exchange before fully relying on hardware tests.
+
+### 4. SILS Validation Result
 
 <p align="center">
   <img src="docs/images/sils_test.png" alt="SILS test result for the balancing robot" width="70%" />
@@ -67,7 +75,7 @@ The following materials summarize how the balancing robot was verified from simu
 
 Before moving to physical testing, the control response was checked through SILS-based validation to confirm that the balancing controller behaved as expected under the designed conditions.
 
-### 4. Additional Evidence
+### 5. Additional Evidence
 
 - [Balancing Robot Evidence PDF](docs/images/balancing_robot_evidence.pdf)
 
