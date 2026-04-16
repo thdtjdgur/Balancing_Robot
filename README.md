@@ -61,9 +61,7 @@ The following materials summarize how the balancing robot was verified from simu
 
 ### 3. HILS Simulation Block Diagram
 
-<p align="center">
-  <img src="docs/images/hils_matlab_block.png" alt="MATLAB/Simulink block diagram for HILS validation" width="75%" />
-</p>
+![MATLAB/Simulink block diagram for HILS validation](docs/images/hils_matlab_block.png)
 
 This MATLAB/Simulink block diagram was used to connect the embedded controller with the simulation environment during HILS validation, making it possible to check the control flow and data exchange before fully relying on hardware tests.
 
