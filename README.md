@@ -97,7 +97,7 @@ To do that, I connected the PC and ESP32 through a `CP2102 USB-to-TTL` module an
 
 #### MATLAB -> ESP32
 
-Based on `hils_flow.pdf`, MATLAB sends four simulated sensor values to the ESP32. In other words, the ESP32 is not receiving arbitrary test numbers here. It is receiving the same kinds of states it would normally read from the real wheel encoders and the IMU.
+MATLAB sends four simulated sensor values to the ESP32. In other words, the ESP32 is not receiving arbitrary test numbers here. It is receiving the same kinds of states it would normally read from the real wheel encoders and the IMU.
 
 - from the virtual wheel encoders:
   - right encoder value
