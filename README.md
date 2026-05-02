@@ -1,37 +1,37 @@
-# ESP32 Self-Balancing Robot with HIL Simulation
+# ESP32 Self-Balancing Robot with HILS, SILS, and Real-World Validation
 
-This repository contains the ESP-IDF firmware for a sophisticated two-wheeled self-balancing robot. The project's core is an advanced control system featuring multiple PID loops. A key aspect of this project is its integration with a Hardware-in-the-Loop (HIL) simulation environment using MATLAB/Simulink, allowing for robust algorithm development and tuning.
+This repository contains the ESP-IDF firmware for a two-wheeled self-balancing robot. The project was validated in three stages: HILS (Hardware-in-the-Loop Simulation) for communication and control-chain verification, SILS (Software-in-the-Loop Simulation) for controller response checks, and physical-world testing for disturbance rejection and Bluetooth teleoperation.
 
 ---
 
 ## Features
 
-- **Advanced Multi-PID Control**: Implements separate, tunable PID controllers for pitch (balance), yaw (rotation), velocity, and roll, enabling highly stable and responsive behavior.
-- **Hardware-in-the-Loop (HIL) Simulation**: Communicates directly with MATLAB/Simulink via UART. The ESP32 can receive simulated sensor data and send back calculated motor outputs, allowing for rapid and safe controller tuning without physical hardware.
-- **Real-Time & Multi-Tasking**: Built on the ESP-IDF and FreeRTOS, with critical operations like HIL communication and motor control separated into high-priority, real-time tasks.
-- **Modular and Abstracted Drivers**: The code is organized into discrete modules for each hardware component, making it clean and extensible.
-- **Support for Advanced Hardware**: Includes drivers for high-performance Dynamixel RX-28 servos, a LiDAR sensor for distance measurement, and an HC-06 Bluetooth module for wireless communication.
+- **Cascaded balance control**: The firmware converts target velocity into target pitch, then converts target pitch into motor q-axis voltage for upright balancing.
+- **Differential yaw control**: Steering is injected as a bounded left/right voltage difference without breaking the main balance loop.
+- **Real-time sensing and actuation**: The IMU loop runs at 200 Hz while the encoder and motor commutation path runs at 1 kHz.
+- **MATLAB/Simulink HILS workflow**: The project includes a documented serial-based HILS pipeline for testing the control chain before full hardware deployment.
+- **Wireless command input**: An HC-06 Bluetooth module is used to receive joystick commands and translate them into velocity and yaw references.
+- **Exact hardware stack**: The final build uses dual GM4108H-120T BLDC wheel motors, dual MKS SimpleFOC MINI driver boards, four Dynamixel RX-28 actuators, an ESP32-S3-WROOM-1 N16R8 controller, WT901 IMU, AS5048A magnetic encoders, MAX485, XL6009 converters, and a 3S LiPo battery.
 
 ---
 
 ## System Design & Control Logic
 
-The robot's stability is maintained by a control system that primarily runs within a FreeRTOS task. The firmware is designed with two main operational modes:
+### 1. Main balance loop
 
-### 1. HIL Simulation Mode
+The control loop is split across two timing domains. `imu_timer_init()` starts the 200 Hz IMU update cycle, and `imu_data_cal()` refreshes `current_pitch`, `current_yaw`, and `current_roll`. In parallel, `encoder_timer_init()` starts the 1 kHz encoder path, and `motor_control_task()` wakes on the encoder semaphore to execute `encoder_to_vcc_cal()`.
 
-This is the primary mode demonstrated in `app_main.c`.
-- The `hils_task` establishes a UART connection with a MATLAB/Simulink host.
-- It continuously waits for a `SimulinkRxPacket` which contains simulated sensor states (e.g., pitch angle from Simulink).
-- This data is fed into the onboard PID controllers (`pitch_ctrl`, `yaw_ctrl`, etc.).
-- The calculated output voltages (`Vq_left`, `Vq_right`) are packaged into a `HILSTxPacket` and sent back to Simulink for analysis.
-- This loop allows for the complete control algorithm to be tested and tuned virtually.
+Inside `app_main.c`, the outer velocity loop converts `targetvel_vel` into `target_pitch`. That target is smoothed before being passed into the pitch loop, which reduces oscillation when speed commands change. A separate yaw command is turned into a bounded differential term, then mixed with the pitch output to produce `Vq_left` and `Vq_right`.
 
-### 2. Physical Hardware Mode
+Inside `encoder.c`, the motor-side loop reconstructs left and right encoder angles, estimates wheel speed, converts the q-axis voltages into electrical angles, and finally generates six phase voltages for the two BLDC motors. Those voltages are applied through `mcpwm_set_voltage()` in `pwm.c`.
 
-While the HIL task is prioritized in the current code, the project is structured to run on physical hardware. By enabling the respective drivers in `app_main.c`, the system can use real-world sensor data.
-- The `imu_timer_init()` and `encoder_timer_init()` set up hardware interrupts to gather data from the IMU (at 200Hz) and motor encoders (at 1KHz).
-- This data would then be used by the PID controllers to command the motors (`rx28.c` or `pwm.c`).
+### 2. Command input path
+
+`hc06.c` receives joystick packets in the `S,x,y,diff,E` format over UART2. The parser recenters the joystick coordinates, suppresses small steering noise with a deadband, and maps the joystick magnitude to either a stop command or a forward velocity target. This keeps wireless control simple while still exercising the real balance and steering logic.
+
+### 3. Additional hardware support
+
+`rx28.c` runs a dedicated FreeRTOS task for four Dynamixel RX-28 actuators through a MAX485 TTL-to-RS-485 link. `lidar.c` contains experimental YDLIDAR G2 support, and `variable.h` also reserves HILS-oriented shared variables such as `hils_angle_l`, `hils_angle_r`, `hils_pitch`, `hils_yaw`, and `hils_v_out[6]` for extended simulation workflows.
 
 ---
 
@@ -73,7 +73,19 @@ Before moving to physical testing, the control response was checked through SILS
 
 This MATLAB/Simulink block diagram was used to connect the embedded controller with the simulation environment during HILS validation, making it possible to check the control flow and data exchange before fully relying on hardware tests.
 
-### 5. Additional Evidence
+### 5. Demonstration Videos
+
+GitHub does not reliably inline-play repository `mp4` files inside `README.md`, so the videos below are linked directly.
+
+- [HILS test video](docs/videos/hils_test.mp4)
+- [SILS yaw test video](docs/videos/sils_yaw_test.mp4)
+- [SILS target velocity test video](docs/videos/sils_target_velocity_test.mp4)
+- [Physical-world disturbance rejection video](docs/videos/real_world_disturbance_rejection.mp4)
+- [Physical-world hold-position video](docs/videos/real_world_hold_position_after_disturbance.mp4)
+- [Physical-world Bluetooth teleoperation video](docs/videos/real_world_bluetooth_control.mp4)
+- [HILS communication flow reference](docs/references/hils_flow.pdf)
+
+### 6. Additional Evidence
 
 - [Balancing Robot Evidence PDF](docs/images/balancing_robot_evidence.pdf)
 
@@ -81,14 +93,24 @@ This MATLAB/Simulink block diagram was used to connect the embedded controller w
 
 ## Hardware Components
 
-This project is designed to interface with the following components:
-- **MCU**: ESP32 Development Board
-- **Motors**: Dynamixel RX-28 Servos (or standard DC motors with encoders)
-- **Motor Driver**: Appropriate driver for the chosen motors.
-- **IMU Sensor**: For orientation and angle measurement.
-- **Distance Sensor**: LiDAR module.
-- **Wireless Communication**: HC-06 Bluetooth module.
-- **Power**: A suitable battery and voltage regulation circuit.
+This project uses the following modules in the final hardware stack:
+
+- **Main controller**: ESP32-S3-WROOM-1 N16R8
+- **Wheel motors**: GM4108H-120T BLDC motors x2
+- **Wheel motor drivers**: MKS SimpleFOC MINI BLDC motor driver boards x2
+- **Wheel encoders**: AS5048A magnetic SPI encoders x2
+- **Leg actuators**: Dynamixel RX-28 x4
+- **Servo bus interface**: MAX485 TTL-to-RS-485 converter module
+- **IMU sensor**: WT901
+- **Wireless control**: HC-06 Bluetooth UART module
+- **HILS serial bridge**: CP2102 USB-to-TTL module
+- **Power**: 3S LiPo battery and XL6009 boost converters
+
+Additional lab and expansion modules referenced in the project:
+
+- **Dynamixel test interface**: U2D2 and U2D2 Power Hub
+- **Optional ranging module**: YDLIDAR G2 support exists in firmware
+- **Not used in final build**: MPU6050 was evaluated but replaced by WT901
 
 ---
 
@@ -97,40 +119,44 @@ This project is designed to interface with the following components:
 This firmware is developed using the Espressif IoT Development Framework (ESP-IDF).
 
 ### Prerequisites
-- A working installation of the ESP-IDF toolchain.
-- For HIL simulation, a MATLAB/Simulink environment configured to communicate over a serial port.
+
+- A working installation of the ESP-IDF toolchain
+- For HILS, a MATLAB/Simulink environment configured for serial communication
 
 ### Build and Flash
-1.  Navigate to the project root directory (`C:\esp32\balancing_robot\main`).
-2.  Open an ESP-IDF command prompt.
-3.  Build the project:
-    ```bash
-    idf.py build
-    ```
-4.  Flash the firmware to the ESP32 (replace `(PORT)` with your device's COM port):
-    ```bash
-    idf.py -p (PORT) flash
-    ```
-5.  To view console output, run the monitor:
-    ```bash
-    idf.py -p (PORT) monitor
-    ```
+
+1. Navigate to the project root directory.
+2. Open an ESP-IDF command prompt.
+3. Build the project:
+
+```bash
+idf.py build
+```
+
+4. Flash the firmware to the ESP32:
+
+```bash
+idf.py -p (PORT) flash
+```
+
+5. Open the serial monitor if needed:
+
+```bash
+idf.py -p (PORT) monitor
+```
 
 ---
 
 ## Project Structure
 
-A brief overview of the key source files:
-
 | File | Description |
 | :--- | :--- |
-| `app_main.c` | Main application entry point. Handles initialization of modules and creation of FreeRTOS tasks. |
-| `pid.c` / `.h` | Contains the implementation of the PID control algorithm. |
-| `imu.c` / `.h` | Driver and data processing logic for the IMU sensor. |
-| `encoder.c` / `.h` | Driver for reading motor encoder values. |
-| `pwm.c` / `.h` | Low-level functions for generating PWM signals for motor control. |
-| `rx28.c` / `.h` | Specific driver for controlling Dynamixel RX-28 servos. |
-| `lidar.c` / `.h` | Driver for interfacing with the LiDAR sensor. |
-| `hc06.c` / `.h` | Driver for handling communication with the HC-06 Bluetooth module. |
-| `variable.h` | Defines shared global variables and constants used across the project. |
-
+| `app_main.c` | Main application entry point. Initializes the control loops, tasks, and shared state. |
+| `pid.c` / `pid.h` | PID controller implementation used by the velocity and pitch loops. |
+| `imu.c` / `imu.h` | WT901 initialization, timer scheduling, and attitude data acquisition. |
+| `encoder.c` / `encoder.h` | Encoder acquisition, velocity estimation, and motor phase-voltage generation. |
+| `pwm.c` / `pwm.h` | Low-level MCPWM voltage application for the six motor phases. |
+| `hc06.c` / `hc06.h` | Bluetooth command input and parsing logic. |
+| `rx28.c` / `rx28.h` | RX-28 actuator control task and interpolation logic. |
+| `lidar.c` / `lidar.h` | LiDAR UART interface for future sensing extensions. |
+| `variable.h` | Shared constants, globals, and cross-module control variables. |
