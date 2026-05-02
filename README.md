@@ -73,6 +73,12 @@ Before moving to physical testing, the control response was checked through SILS
 
 This MATLAB/Simulink block diagram was used to connect the embedded controller with the simulation environment during HILS validation, making it possible to check the control flow and data exchange before fully relying on hardware tests.
 
+The HILS communication flow was documented separately in `hils_flow.pdf`, and the implementation follows that same structure. A CP2102 USB-to-TTL module is used as the serial bridge between the PC and ESP32 UART2, with ESP32 TX on GPIO17 and RX on GPIO18. In this setup, MATLAB/Simulink sends simulated sensor states to the firmware, and the firmware returns the motor-side three-phase voltage commands that would be applied to the left and right BLDC motors.
+
+On the `MATLAB -> ESP32` path, the packet contains four `single` values: left encoder angle, right encoder angle, pitch, and yaw. Each `single` occupies 4 bytes, so one packet is 16 bytes in total. The HILS flow document states that encoder-side data is refreshed at 1 kHz, while pitch and yaw are refreshed at 200 Hz. With a 1 kHz transmit rate, the raw payload is `16 bytes * 1000 = 16000 bytes/s`. After accounting for UART framing overhead, the document estimates the line requirement at about `160000 bps`, which is why the project uses `921600 bps` to leave enough communication margin.
+
+On the `ESP32 -> MATLAB` path, the firmware first uses the 200 Hz attitude update to generate `Vq_left` and `Vq_right`, then uses the 1 kHz encoder-side loop to expand those values into six three-phase voltages for the two BLDC motors. Those six phase-voltage values are returned to MATLAB as one 24-byte packet because `6 floats * 4 bytes = 24 bytes`. In Simulink, `Serial Receive` first reads the 24-byte `uint8` payload, and `Byte Unpack` reconstructs the six `single` values so the virtual plant can apply the same motor commands that would be used on hardware.
+
 ### 5. Demonstration Videos
 
 GitHub does not reliably inline-play repository `mp4` files inside `README.md`, so the videos below are linked directly.
