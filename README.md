@@ -44,7 +44,20 @@ The control flow is simple in concept:
 
 In other words, the velocity controller decides how much the body should lean, and the pitch controller keeps the robot from falling while following that lean target.
 
-### 2. Joystick input
+### 2. RTOS scheduling on the real robot
+
+The semaphore-based scheduling in this repository was part of the real hardware code path, not just a simulation-side idea.
+
+- `encoder_timer_init()` configures a GPTimer with `1 MHz` resolution and `alarm_count = 1000`, so the encoder side is triggered every `1 ms` (`1 kHz`).
+- Each encoder tick queues SPI reads for both wheel encoders, and `spi_post_callback()` releases `encoder_sem` with `xSemaphoreGiveFromISR()` as soon as the read is complete.
+- `motor_control_task` is created at priority `5` and blocks on `xSemaphoreTake(encoder_sem, portMAX_DELAY)`, so the motor-voltage update runs only when fresh encoder data is ready.
+- If that encoder semaphore wakes a higher-priority task, `portYIELD_FROM_ISR()` requests an immediate context switch right after the ISR finishes.
+- `imu_timer_init()` uses another GPTimer with `IMU_ALARM_COUNT = 5000`, which means the IMU path runs every `5 ms` (`200 Hz`), and its ISR releases `imu_sem` for the state-update path in `app_main()`.
+- Other real-time work is also separated: `RX28_Task` runs at priority `4`, and `hc06_event_task` handles Bluetooth packets through the ESP-IDF UART event queue at priority `12`.
+
+This detail mattered a lot on the real robot. Before I used semaphore-based wakeups, the motors vibrated badly because the balancing loop timing was not deterministic. After I made the encoder-triggered motor path higher priority than the IMU path, and woke it directly from the encoder ISR, the vibration disappeared.
+
+### 3. Joystick input
 
 In `hc06.c`, I parse Bluetooth joystick packets in the `S,x,y,diff,E` format.
 
@@ -55,7 +68,7 @@ In `hc06.c`, I parse Bluetooth joystick packets in the `S,x,y,diff,E` format.
 
 Because of that structure, forward motion and turning are not handled as separate disconnected modes. The steering command is layered on top of the balancing controller.
 
-### 3. Joint control and expandable hardware
+### 4. Joint control and expandable hardware
 
 This robot also includes joint actuators, not just wheel control.
 
@@ -161,6 +174,8 @@ In the real tests, I focused on three things:
 - whether it leaned naturally to follow a speed target
 - whether Bluetooth teleoperation could be added without breaking balance
 
+One of the main hardware-side lessons was scheduling stability. The semaphore and priority structure was not just a clean software design choice. It was what removed the severe motor vibration I saw before the encoder-driven motor path was allowed to preempt the slower IMU path.
+
 ---
 
 ## Media
@@ -209,9 +224,9 @@ For the final balancing tests, the IMU I actually used was `WT901`.
 
 ## File map
 
-- `app_main.c`: entry point for the full control flow
-- `encoder.c`, `encoder.h`: encoder reading, velocity estimation, 3-phase voltage generation
-- `imu.c`, `imu.h`: WT901 data acquisition
+- `app_main.c`: entry point, task creation, semaphore waits, and controller integration
+- `encoder.c`, `encoder.h`: encoder SPI timing, ISR wakeup, velocity estimation, and 3-phase voltage generation
+- `imu.c`, `imu.h`: WT901 data acquisition and the 200 Hz IMU semaphore path
 - `pid.c`, `pid.h`: PID calculation
 - `pwm.c`, `pwm.h`: PWM output
 - `hc06.c`: Bluetooth joystick input
