@@ -44,7 +44,22 @@ The control flow is simple in concept:
 
 In other words, the velocity controller decides how much the body should lean, and the pitch controller keeps the robot from falling while following that lean target.
 
-### 2. RTOS scheduling on the real robot
+### 2. Why the velocity estimate is updated every 10 ms
+
+I still read the encoder angle at `1 kHz`, but I do not recompute the wheel velocity from a `1 ms` angle difference every cycle.
+
+At `1 kHz`, the angle change per sample is very small. Because the velocity estimate is `delta angle / delta t`, even a small encoder wobble can look like a very large speed spike when `delta t` is only `1 ms`.
+
+To reduce that effect, `encoder.c` updates the velocity estimate only once every `10` encoder cycles, so the effective velocity-estimation interval becomes `10 ms`.
+
+- the encoder angle is still sampled at `1 kHz`
+- only the velocity estimate is decimated to `100 Hz`
+- the code unwraps the angle difference at `+/-pi` so one full rotation does not appear as a false jump
+- a light `0.5 / 0.5` low-pass filter smooths the remaining noise
+
+In practice, this made the speed feedback much less sensitive to encoder noise without adding a large delay to the balancing controller.
+
+### 3. RTOS scheduling on the real robot
 
 The semaphore-based scheduling in this repository was part of the real hardware code path, not just a simulation-side idea.
 
@@ -57,7 +72,7 @@ The semaphore-based scheduling in this repository was part of the real hardware 
 
 This detail mattered a lot on the real robot. Before I used semaphore-based wakeups, the motors vibrated badly because the balancing loop timing was not deterministic. After I made the encoder-triggered motor path higher priority than the IMU path, and woke it directly from the encoder ISR, the vibration disappeared.
 
-### 3. Joystick input
+### 4. Joystick input
 
 In `hc06.c`, I parse Bluetooth joystick packets in the `S,x,y,diff,E` format.
 
@@ -68,7 +83,7 @@ In `hc06.c`, I parse Bluetooth joystick packets in the `S,x,y,diff,E` format.
 
 Because of that structure, forward motion and turning are not handled as separate disconnected modes. The steering command is layered on top of the balancing controller.
 
-### 4. Joint control and expandable hardware
+### 5. Joint control and expandable hardware
 
 This robot also includes joint actuators, not just wheel control.
 
@@ -224,15 +239,17 @@ For the final balancing tests, the IMU I actually used was `WT901`.
 
 ## File map
 
-- `app_main.c`: entry point, task creation, semaphore waits, and controller integration
-- `encoder.c`, `encoder.h`: encoder SPI timing, ISR wakeup, velocity estimation, and 3-phase voltage generation
-- `imu.c`, `imu.h`: WT901 data acquisition and the 200 Hz IMU semaphore path
-- `pid.c`, `pid.h`: PID calculation
-- `pwm.c`, `pwm.h`: PWM output
-- `hc06.c`: Bluetooth joystick input
-- `rx28.c`, `rx28.h`: RX-28 control
-- `lidar.c`, `lidar.h`: LiDAR expansion code
-- `variable.h`: shared control variables and constants
+- `SoftWare/Physical_operation_code/`: main ESP-IDF firmware project for the physical balancing robot
+- `SoftWare/Physical_operation_code/app_main.c`: entry point, task creation, semaphore waits, and controller integration
+- `SoftWare/Physical_operation_code/encoder.c`, `SoftWare/Physical_operation_code/encoder.h`: encoder SPI timing, ISR wakeup, velocity estimation, and 3-phase voltage generation
+- `SoftWare/Physical_operation_code/imu.c`, `SoftWare/Physical_operation_code/imu.h`: WT901 data acquisition and the 200 Hz IMU semaphore path
+- `SoftWare/Physical_operation_code/pid.c`, `SoftWare/Physical_operation_code/pid.h`: PID calculation
+- `SoftWare/Physical_operation_code/pwm.c`, `SoftWare/Physical_operation_code/pwm.h`: PWM output
+- `SoftWare/Physical_operation_code/hc06.c`: Bluetooth joystick input
+- `SoftWare/Physical_operation_code/rx28.c`, `SoftWare/Physical_operation_code/rx28.h`: RX-28 control
+- `SoftWare/Physical_operation_code/lidar.c`, `SoftWare/Physical_operation_code/lidar.h`: LiDAR expansion code
+- `SoftWare/Physical_operation_code/variable.h`: shared control variables and constants
+- `SoftWare/hils_test_code/`: HILS-oriented ESP-IDF project variant
 
 ---
 
@@ -240,7 +257,7 @@ For the final balancing tests, the IMU I actually used was `WT901`.
 
 This project is written for `ESP-IDF`.
 
-1. Move into the project directory.
+1. Move into `SoftWare/Physical_operation_code`.
 2. Open the ESP-IDF environment.
 3. Build the project.
 
@@ -259,6 +276,8 @@ idf.py -p (PORT) flash
 ```bash
 idf.py -p (PORT) monitor
 ```
+
+If you want to work on the HILS variant instead, move into `SoftWare/hils_test_code` and use the same `idf.py` workflow there.
 
 ---
 
