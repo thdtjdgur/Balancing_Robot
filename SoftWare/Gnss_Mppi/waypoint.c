@@ -41,11 +41,11 @@ void waypoint_start(void)
 
 void waypoint_update(void)
 {
-    if (!mission_active) {
-        return;
+    if (!mission_active) {//mission_active는 웨이포인트 다 돌때까지 임1
+        return;//처음 시작할때 한번만 들어옴
     }
 
-    if (!goal_loaded) {
+    if (!goal_loaded) {//처음 시작할때 한번만 들어옴
         goal_x = station_x[current_waypoint_idx];
         goal_y = station_y[current_waypoint_idx];
         goal_loaded = 1;

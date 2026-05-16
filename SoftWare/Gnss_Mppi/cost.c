@@ -49,6 +49,7 @@ void build_lidar_sectors(void)
 {
     for (int i = 0; i < MPPI_NUM_SECTORS; i++) {
         sector_distance_m[i] = 999.0f;//999m, 장애물이 근처에 없다라고 초기화
+        sector_closest_angle_rad[i] = 0.0f;
         //sector_distance_m[i]는 각 섹터 대표 최소거리
     }
 
@@ -78,7 +79,7 @@ void build_lidar_sectors(void)
 //명령줄 500중 각각에 대해 아래 함수를 실행해서 어떤 위치에 로봇이 있을때의 
 //장애물까지의 거리를 아용해 그 명령줄에 대한 비용을 계산하는 함수 
 //현재 스캔을 기준으로 각 섹터 장애물 점을 world 좌표로 만든 뒤,
-//미래 예측 상태와의 최소거리를 이용해 장애물 비용 계산
+//미래 예측 상태와 장애물의 최소거리를 이용해 장애물 비용 계산
 float calc_sector_obstacle_cost(const MPPI_State *pred_state,//미래 로봇 상태
                 const MPPI_State *scan_origin_state)//라이다 읽은순간 로봇상태
 {
@@ -108,6 +109,7 @@ float calc_sector_obstacle_cost(const MPPI_State *pred_state,//미래 로봇 상
         }
     }
 
+
     return total_cost;
 }
 
@@ -136,3 +138,13 @@ float calc_smooth_cost(const MPPI_Input *input, const MPPI_Input *prev_input)
 }
 /////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////
+
+const float *get_sector_distance_array(void)
+{
+    return sector_distance_m;
+}
+
+const float *get_sector_angle_array(void)
+{
+    return sector_closest_angle_rad;
+}

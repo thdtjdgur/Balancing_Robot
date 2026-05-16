@@ -13,12 +13,40 @@ float goal_y = 0.0f;
 volatile int station_waypoint_ready = 0;
 
 int station_count = 0;//웨이포인트 xy좌표 쌍 개수
-float station_x[MAX_WAYPOINTS];
+float station_x[MAX_WAYPOINTS];//웨이포인트 xy좌표
 float station_y[MAX_WAYPOINTS];
 
-static float ref_latitude = 0.0f;//기준 위도
-static float ref_longitude = 0.0f;//기준 경도
+static float station_lat[MAX_WAYPOINTS];//웨이포인트 위도, 경도좌표
+static float station_lon[MAX_WAYPOINTS];
+static int station_waypoint_pending = 0;
+
+static float ref_latitude = 0.0f;//로봇의 맨 처음 위도
+static float ref_longitude = 0.0f;//로봇의 맨 처음 경도
 static int gnss_ref_initialized = 0;
+
+
+static void latlon_to_local_xy(float latitude, float longitude, float *x, float *y)
+{
+    float lat_rad = ref_latitude * (float)M_PI / 180.0f;
+    float d_lat = latitude - ref_latitude;
+    float d_lon = longitude - ref_longitude;
+
+    *y = d_lat * 111320.0f;
+    *x = d_lon * 111320.0f * cosf(lat_rad);
+}
+
+
+//로봇위치를 0,0기준으로 삼아서 웨이포인트 위도경도 좌표를 xy좌표로 변환하는 코드
+static void convert_station_waypoints_to_local_xy(void)
+{
+    for (int i = 0; i < station_count; i++) {
+        latlon_to_local_xy(station_lat[i], station_lon[i], &station_x[i], &station_y[i]);
+    }
+
+    station_waypoint_pending = 0;
+    station_waypoint_ready = 1;
+}
+
 
 void init_gnss(void)
 {
@@ -30,16 +58,16 @@ void init_gnss(void)
     ref_latitude = 0.0f;
     ref_longitude = 0.0f;
     gnss_ref_initialized = 0;
+    station_count = 0;
+    station_waypoint_ready = 0;
+    station_waypoint_pending = 0;
 }
 
 
+//웨이포인트 패킷 받으면 여기로 들어옴
 //패킷안의 웨이포인트 좌표를 변수에 저장하고 패킷받았다는 플래그 1로 표시
 void station_waypoint_packet_received(const float *packet, int packet_len)
 {
-    if (packet == 0 || packet_len <= 0) {
-        return;
-    }
-
     int count = (int)packet[0];
     //패킷 첫번째 값이 웨이포인트 x,y쌍의 개수라고 가정하고 count에 저장
 
@@ -56,14 +84,19 @@ void station_waypoint_packet_received(const float *packet, int packet_len)
         return;
     }
 
-    station_count = count;//웨이포인트 xy좌표 쌍 개수를 station_count에 저장
+    station_count = count;//웨이포인트 위도경도좌표 쌍 개수를 station_count에 저장
 
     for (int i = 0; i < count; i++) {
-        station_x[i] = packet[1 + (2 * i)];
-        station_y[i] = packet[1 + (2 * i) + 1];
+        station_lat[i] = packet[1 + (2 * i)];
+        station_lon[i] = packet[1 + (2 * i) + 1];
     }
 
-    station_waypoint_ready = 1;
+    if (gnss_ref_initialized) {//update_gnss_position함수에서 1됨. 
+    //이유는 rtk로 로봇의 위치를 알게 되었을때 그 점을 기준으로 웨이포인트 위도경고 값을 xy좌표로 변환 가능함
+        convert_station_waypoints_to_local_xy();
+    } else {
+        station_waypoint_pending = 1;
+    }
 }
 
 
@@ -73,7 +106,8 @@ int gnss_is_initialized(void)
     return gnss_ref_initialized;
 }
 
-void update_gnss_position(float latitude, float longitude)//gnss rtk모듈에서 받은 위도, 경도가
+//gnss rtk값 받는 함수 만들어서 그 안에서 호출애햐됨
+void update_gnss_position(float latitude, float longitude)//매개변수: gnss rtk모듈에서 받은 로봇의 위도, 경도임
 {
     // 처음 들어온 위치를 기준점으로 사용하고 함수호출. 그다음부터 위도, 경도 들어오면 기준점 위도, 경도를 사용해서 이동 계산
     if (!gnss_ref_initialized) {
@@ -82,6 +116,9 @@ void update_gnss_position(float latitude, float longitude)//gnss rtk모듈에서
         gnss_ref_initialized = 1;
         gnss_x = 0.0f;
         gnss_y = 0.0f;
+        if (station_waypoint_pending) {
+            convert_station_waypoints_to_local_xy();
+        }
         return;
     }
 
@@ -107,23 +144,8 @@ void update_gnss_position(float latitude, float longitude)//gnss rtk모듈에서
     gnss_x = d_lon * 111320.0f * cosf(lat_rad);
 }
 
-void update_waypoint_position(float waypoint_latitude, float waypoint_longitude)
-{
-    if (!gnss_ref_initialized) {
-        goal_x = 0.0f;
-        goal_y = 0.0f;
-        return;
-    }
-    //로봇 위도, 경도가 업데이트 되면 아래 코드로 들어감
-    float lat_rad = ref_latitude * (float)M_PI / 180.0f;
-    float d_lat = waypoint_latitude - ref_latitude;         //웨이포인트 위도 - 로봇의 기준 위도
-    float d_lon = waypoint_longitude - ref_longitude;       //웨이포인트 경도 - 로봇의 기준 경도
 
-    goal_y = d_lat * 111320.0f;                             //로봇의 기준x좌표로부터 떨어진 거리(m)
-    goal_x = d_lon * 111320.0f * cosf(lat_rad);             //로봇의 기준y좌표로부터 떨어진 거리(m)
-}
-
-
+//웨이포인트 패킷 받으면 여기로 들어옴
 void gnss_receive_complete(const float *packet, int packet_len)
 {
     if (packet == 0 || packet_len <= 0) {

@@ -16,6 +16,5 @@ extern float station_y[MAX_WAYPOINTS];
 void init_gnss(void);
 int gnss_is_initialized(void);
 void update_gnss_position(float latitude, float longitude);
-void update_waypoint_position(float waypoint_latitude, float waypoint_longitude);
 void gnss_receive_complete(const float *packet, int packet_len);
 

@@ -125,15 +125,19 @@ void app_main(void) {
 
             //실제 I2C 통신 수행 (ISR 밖이므로 안전)
             imu_data_cal(imu_handle);   
-            
-            //station_packet_ready는 gnss모듈관련 코드 작성한뒤 웨이포인트 패킷받고 1로 해줘야함
+    
+            //*****gnss웨이포인트관련 함수코드 작성한뒤 그 안에서 station_packet[], station_packet_len 채우기
+            //*****또한 그 함수 안에서 마지막에 station_packet_ready를 1로 해줘야함
+            //*****gnss rtk보정값 받는코드 짜고, 그 안에서  update_gnss_position 함수 호출해야함. mppi제어주기로 호출하자
+            //*****기지국에서 로봇으로 웨이포인트 위도경도를 보내줘야함.
             if (station_packet_ready) {
                 gnss_receive_complete(station_packet, station_packet_len);
                 //station_packet는 웨이포인트 패킷 데이터 배열
-                //station_packet_len 패킷길이. ex) 패킷 = [3, x0, y0, x1, y1, x2, y2]이면 station_packet_len는 7임
+                //station_packet_len 패킷길이. ex) 패킷 = [3, lat0, lon0, lat1, lon1, lat2, lon2]이면 station_packet_len는 7임
                 station_packet_ready = 0;
             }
 
+            //convert_station_waypoints_to_local_xy 함수에서 station_waypoint_ready가 1이 됨
             if (station_waypoint_ready) {
                 waypoint_start();
                 station_waypoint_ready = 0;

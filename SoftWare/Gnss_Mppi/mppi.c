@@ -7,6 +7,10 @@
 #include "cost.h"
 #include "waypoint.h"
 #include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include "driver/uart.h"
+
 
 #define MPPI_MAX_HORIZON 10
 #define MPPI_MAX_SAMPLES 64
@@ -221,6 +225,54 @@ static MPPI_State get_current_state(void)
     return state;
 }
 
+//*****로그 출력 완료하면 지우기
+static void send_cost_log_hc06(const MPPI_State *scan_origin_state,//*****
+                               const MPPI_State *pred_state,
+                               float label_cost)
+{
+    static int csv_header_sent = 0;
+    static const char *csv_header =
+        "scan_x,scan_y,scan_psi,pred_x,pred_y,"
+        "d0,d1,d2,d3,d4,d5,d6,d7,d8,d9,d10,d11,d12,d13,d14,d15,d16,d17,d18,d19,d20,d21,d22,d23,"
+        "a0,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10,a11,a12,a13,a14,a15,a16,a17,a18,a19,a20,a21,a22,a23,"
+        "label_cost\n";
+
+    const float *d = get_sector_distance_array();
+    const float *a = get_sector_angle_array();
+
+    char tx_buf[2048];
+    int len = 0;
+
+    if (!csv_header_sent) {
+        uart_write_bytes(UART_NUM_2, csv_header, strlen(csv_header));
+        csv_header_sent = 1;
+    }
+
+    len += snprintf(tx_buf + len, sizeof(tx_buf) - len,
+                    "%.6f,%.6f,%.6f,%.6f,%.6f,",
+                    scan_origin_state->x,
+                    scan_origin_state->y,
+                    scan_origin_state->psi,
+                    pred_state->x,
+                    pred_state->y);
+
+    for (int i = 0; i < MPPI_NUM_SECTORS; i++) {
+        len += snprintf(tx_buf + len, sizeof(tx_buf) - len,
+                        "%.6f,", d[i]);
+    }
+
+    for (int i = 0; i < MPPI_NUM_SECTORS; i++) {
+        len += snprintf(tx_buf + len, sizeof(tx_buf) - len,
+                        "%.6f,", a[i]);
+    }
+
+    len += snprintf(tx_buf + len, sizeof(tx_buf) - len,
+                    "%.6f\n", label_cost);
+
+    uart_write_bytes(UART_NUM_2, tx_buf, len);
+}
+
+
 
 float wrap_to_pi(float angle)
 {
@@ -283,7 +335,7 @@ void MPPI_Task(void *pvParameters)
 
         waypoint_update();
 
-        if (!waypoint_is_active()) {
+        if (!waypoint_is_active()) {//처음, 끝났을때 말고는 여기 안들어옴
             targetvel_vel = 0.0f;
             target_yaw_diff = 0.0f;
             sequence_initialized = 0;
@@ -325,6 +377,11 @@ void MPPI_Task(void *pvParameters)
                                   sequence_weights,
                                   num_samples,
                                   horizon);
+        
+        MPPI_State log_pred_state = predict_next_state(&current_state, &best_sequence[0]);//*****로그 출력 완료하면 지우기
+        float log_cost = calc_sector_obstacle_cost(&log_pred_state, &current_state);//*****로그 출력 완료하면 지우기
+        send_cost_log_hc06(&current_state, &log_pred_state, log_cost);//*****로그 출력 완료하면 지우기
+
 
         // 최종 명령표의 첫 번째 입력만 실제 적용
         targetvel_vel = best_sequence[0].v_ref;
