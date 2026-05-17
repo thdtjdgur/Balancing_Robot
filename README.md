@@ -200,9 +200,12 @@ GitHub does not always render repository `mp4` files nicely inside `README.md`, 
 - [HILS test video](docs/videos/hils_test.mp4)
 - [SILS yaw test video](docs/videos/sils_yaw_test.mp4)
 - [SILS target velocity test video](docs/videos/sils_target_velocity_test.mp4)
+- [SILS disturbance rejection test](docs/videos/sils_disturbance_rejection.mp4)
 - [Real-world disturbance rejection test](docs/videos/real_world_disturbance_rejection.mp4)
 - [Real-world hold-position test](docs/videos/real_world_hold_position_after_disturbance.mp4)
 - [Real-world Bluetooth driving test](docs/videos/real_world_bluetooth_control.mp4)
+- [BLDC inverse DQ control video (Q=1)](docs/videos/inverse_dq_control_q1.mp4)
+- [BLDC inverse DQ control video (Q=4)](docs/videos/inverse_dq_control_q4.mp4)
 - [HILS structure reference PDF](docs/references/hils_flow.pdf)
 
 Additional material:
