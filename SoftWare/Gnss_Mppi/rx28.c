@@ -13,12 +13,13 @@
 // ========== [추가된 부분 시작: 수학 함수 및 LUT 제어 변수] ==========
 extern float roll_adj_mm; // app_main.c에서 PID로 계산된 보상 길이(mm)
 
-// 질문자님이 구하신 황금 데이터 (0도 포함 7개 포인트)
-const float knee_deg[7] = {0.0f, 16.0f, 33.0f, 49.0f, 65.0f, 82.0f, 98.0f};
+// 내가 구한 황금 데이터 (0도 포함 7개 포인트)
+const float knee_deg[7] = {0.0f, 16.0f, 33.0f, 49.0f, 65.0f, 82.0f, 98.0f};//로봇 무게중심 맞을때의 무릎 디그리각도 배열
 const int16_t hip_rx_data[7]  = {0, 34, 68, 102, 136, 170, 205};
 const int16_t knee_rx_data[7] = {0, 53, 111, 167, 223, 280, 334};
 
 float leg_heights[7]; // 각 포인트일 때의 다리 전체 길이(mm) 저장용
+
 
 // 높이(H)를 입력받아 보간된 골반/무릎 RX값을 반환하는 함수
 void get_balanced_angles(float target_H, int16_t *out_hip, int16_t *out_knee) {
@@ -43,7 +44,9 @@ void get_balanced_angles(float target_H, int16_t *out_hip, int16_t *out_knee) {
 }
 // ========== [추가된 부분 끝] ==========
 
+
 #define CLAMP(val, min, max) ((val) < (min) ? (min) : ((val) > (max) ? (max) : (val)))
+
 
 void init_rx28()
 {
@@ -64,17 +67,19 @@ void init_rx28()
     // Configure UART parameters
     ESP_ERROR_CHECK(uart_param_config(uart_num, &uart_config));
     ESP_ERROR_CHECK(uart_set_pin(UART_NUM_0, 43, 44, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));//ESP32보드 핀의 UART핀 설정
-}
 
-//2초마다 RX-28 패킷을 쏘는 전담 요리사(쓰레드)
-void rx28_task(void *pvParameters) {
-    // ========== [추가된 부분 시작: 태스크 시작 시 다리 높이 초기 계산] ==========
     for(int i = 0; i < 7; i++) {
-        float inner_angle_rad = (180.0f - knee_deg[i]) * M_PI / 180.0f;
+        float inner_angle_rad = (180.0f - knee_deg[i]) * M_PI / 180.0f;//무릎각을 라디안 단위로 변환하는 공식
         leg_heights[i] = sqrtf(111.1f*111.1f + 113.0f*113.0f - 2.0f*111.1f*113.0f * cosf(inner_angle_rad));
         //삼각형에서 두 변의 거리와 끼인각을 알때 끼인각과 마주보는 변의 길이 구하는 공식
         //leg_heights는 6개의 무릎 각도에 대해 허벅지, 종아리, 골반과 바퀴사이의 거리에 대한 삼각형에서의 미리 계산된 골반과 바퀴사이의 거리임
     }
+}
+
+
+//2초마다 RX-28 패킷을 쏘는 전담 요리사(쓰레드)
+void rx28_task(void *pvParameters) {
+    // ========== [추가된 부분 시작: 태스크 시작 시 다리 높이 초기 계산] ==========
     float H_max = leg_heights[0]; // 다리를 완전히 폈을 때 골반에서 바퀴까지의 거리
     // ========== [추가된 부분 끝] ==========
 
@@ -85,10 +90,10 @@ void rx28_task(void *pvParameters) {
         float H_right = H_max;
         
         
-        // roll_adj_mm에 따라 다리 길이 조절 (양수면 왼쪽 굽힘, 음수면 오른쪽 굽힘)
+        // roll_adj_mm에 따라 다리 길이 조절 (양수면 왼쪽 굽힘, 음수면 오른쪽 굽힘)//오른쪽으로 기울이면 roll증가->i값 음수
         if (roll_adj_mm > 0.0f) {
-            H_right = H_max - roll_adj_mm; //roll_adj_mms는 roll_pid를 통해서 땅과 바퀴가 떨어진 거리로 실시간 갱신중임
-        } else if (roll_adj_mm < 0.0f) { //즉 허벅지, 골반, 허벅지와 골반사이의 거리에 대한 삼각형에서 H_right는 바퀴와 골반사이의 거리(이만큼 굽혀야하는 거리)가 실시간 계산됨
+            H_right = H_max - roll_adj_mm;  // roll PID 출력(mm)만큼 오른쪽 다리 목표 길이(H_right)를 줄임, 다리를 굽혔을때 땅과 골반사이의 거리
+        } else if (roll_adj_mm < 0.0f) {
             H_left = H_max - (-roll_adj_mm); 
         }
         

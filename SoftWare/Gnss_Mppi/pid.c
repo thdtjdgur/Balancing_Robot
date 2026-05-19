@@ -16,7 +16,7 @@ float pid_calculate(PIDController *pid, float setpoint, float measurement, float
     pid->err3 = pid->err2;
     pid->err2 = pid->err1;
     pid->err1 = setpoint - measurement;
-    //목표기울기가 10도이고 현재 기울기가 0도이면 pid->err1는 0임
+    //목표기울기가 10도이고 현재 기울기가 0도이면 pid->err1은 0임
     pid->err_sum += pid->err1;
 
     pid->meas4 = pid->meas3;

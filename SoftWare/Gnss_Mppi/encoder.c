@@ -137,12 +137,12 @@ void encoder_init(void)//엔코더 초기설정
     //전송 구조체 세부 설정 (왼쪽)
     t_left.length = 16;
     t_left.tx_buffer = &tx_data;//0xFFFF라는 변수의 주소값 전달
-    t_left.rx_buffer = &rx_data_left;//엔코더가 준 값이 이 주소의 변수에 저장됨
+    t_left.rx_buffer = &rx_data_left;//엔코더가 준 값이 rx_data_left변수에 저장됨
 
     //전송 구조체 세부 설정 (오른쪽)
     t_right.length = 16;
     t_right.tx_buffer = &tx_data;//0xFFFF라는 변수의 주소값 전달
-    t_right.rx_buffer = &rx_data_right;//엔코더가 준 값이 이 주소의 변수에 저장됨
+    t_right.rx_buffer = &rx_data_right;//엔코더가 준 값이 rx_data_right변수에 저장됨
 
     // 콜백 함수에 두 핸들을 모두 전달하기 위해 구조체에 담음
     enc_ctx.left = h_left;

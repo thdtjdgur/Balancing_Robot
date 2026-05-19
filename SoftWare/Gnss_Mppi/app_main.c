@@ -90,7 +90,7 @@ void app_main(void) {
     pid_init(&vel_ctrl, 0.35f, 0.002f, 0.0001f, 0.3f);//10.0f는 (속도pid결과값 = 목표피치각도 한계값, 지금은 최대 3도)임. p=0.43, i=0.001, limit=0.3f
     pid_init(&pitch_ctrl, 30.0f, 0.0f, 0.21f, 15.0f);//속도 pid에서 0.174라디안(10도)이 넘어왔을때 kp=100을 곱하면 17.4가 나옴(p=60 d=0.4, limit=15.0f)
     pid_init(&yaw_ctrl, 0.4f, 0.0f, 0.0001f, 2.0f);//목표요를 0.4rad(20도)로 했을때 kp=20을 곱하면 8이 나옴
-    pid_init(&roll_ctrl, 2.0f, 0.08f, 0.01f, 150.0f);//v_limit=50.0f (장애물 높으 120mm까지 대응하도록 제한)
+    pid_init(&roll_ctrl, 2.0f, 0.10f, 0.01f, 150.0f);//v_limit=50.0f (장애물 높이 150mm까지 대응하도록 제한)
      
 
     i2c_master_dev_handle_t imu_handle = imu_init();// IMU 디바이스 초기화 및 핸들 획득
@@ -149,7 +149,7 @@ void app_main(void) {
                 current_roll = 0.0f;
             }
 
-            //roll_adj_mm = pid_calculate(&roll_ctrl, 0.0f, current_roll, 0.005f);// rx28제어할거면 주석해제
+            roll_adj_mm = pid_calculate(&roll_ctrl, 0.0f, current_roll, 0.005f);// rx28제어할거면 주석해제//////////////////////////////////////////
 
             static float target_pitch = 0.0f;   
 

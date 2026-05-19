@@ -14,7 +14,7 @@ void init_mcpwm_bldc() {
     mcpwm_timer_config_t timer_conf0 = {
         .group_id = 0,
         .clk_src = MCPWM_TIMER_CLK_SRC_DEFAULT,
-        .resolution_hz = PWM_FREQ_HZ * PWM_PERIOD,//1초에 20M번 카운트함
+        .resolution_hz = PWM_FREQ_HZ * PWM_PERIOD,//1초에 20M번 카운트함(50ns)
         .period_ticks = PWM_PERIOD,//1000번 카운트하면 리셋. 즉 resolution_hz와 period_ticks에 의해 20khz가 완성됨
         .count_mode = MCPWM_TIMER_COUNT_MODE_UP,
     };
@@ -68,8 +68,13 @@ void mcpwm_set_voltage(int phase, float target_voltage) {
 
     float duty_cycle = 0.5f + (target_voltage / BATTERY_VOLTAGE);
     //0.5더하는 이유: 배터리전압20v, 제어전압6v일때 0.5+6/20 = 0.8(80%)
+    //듀티사이클은 0(0%켜짐)~1(100%켜짐)사이이기 때문에 0.5를 더해주고(듀티사이클이 음수가 되지 않게 하기위함) 
+    //타겟전압의 최대최소값은 배터리전압의 절반으로 설정해줘야함(듀티사이클이 1을 넘지 않게 하기위함 )
 
     uint32_t compare_value = (uint32_t)(duty_cycle * PWM_PERIOD);
+    //.resolution_hz = PWM_FREQ_HZ * PWM_PERIOD에서 resolution_hz는 20Mhz(50ns)임. 즉 1초에 20M카운트함
+    //근데 pwm한 주기는 1000칸이므로 pwm한주기의 시간은 50ns*1000=50us임.(즉 pwm주파수 = 20khz)
+    //이때 compare_value가 800이라면 한 주기에서 80%는 켜지고 20%는 꺼짐
 
     mcpwm_comparator_set_compare_value(comparators[phase], compare_value);
 }

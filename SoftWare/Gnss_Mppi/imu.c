@@ -104,7 +104,7 @@ void imu_data_cal(i2c_master_dev_handle_t dev_handle) {
     // 데이터시트 변환 공식: raw / 32768 * 180
     current_pitch = (float)p_raw / 32768.0f * M_PI; // 랴디안 // current_yaw   = (float)y_raw / 32768.0f * 180.0f;//도
     current_yaw   = (float)y_raw / 32768.0f * M_PI;   // 라디안
-    current_roll  = (float)r_raw / 32768.0f * 180.0f + 1.43f;
+    current_roll  = (float)r_raw / 32768.0f * 180.0f + 1.43f; //디그리값
     gyro  = (float)g_raw / 32768.0f * 2000.0f;  // 도/초(deg/s)
     gyro = -gyro * M_PI / 180;//rad/s
     //오른회전 양의 각속도
