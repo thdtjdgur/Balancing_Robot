@@ -10,11 +10,18 @@ I did not tune this project by jumping straight into full hardware tests. I veri
 
 This robot is not just a pair of wheels. I used `GM4108H-120T` BLDC wheel motors together with `RX-28` joint actuators, so I wanted this README to explain not only what the code does, but also how I validated the controller before relying on the real machine.
 
+The current navigation target for this project is a waypoint-based search mission. A ground station sends GPS waypoint data, the ESP32 converts that mission into local `x/y` targets, and the robot moves through the waypoints in order while avoiding nearby obstacles. The high-level command generator is an `MPPI` controller: it samples candidate `v_ref` and `w_ref` command sequences, predicts the robot motion, scores each sequence with a cost function, and applies the first command from the weighted best sequence.
+
+At the lower level, those MPPI commands are not sent directly to the motors. The velocity and yaw targets pass through the balancing control stack that I had already validated through `SILS` and `HILS`, and the final wheel-side commands are converted into the `Vq_left` and `Vq_right` values used by the BLDC 3-phase voltage generation path.
+
 ---
 
 ## What I built
 
 - An ESP32-S3 balancing control loop
+- A GNSS waypoint mission layer for moving through ground-station targets in sequence
+- An MPPI command generator that produces target velocity and angular velocity
+- A MATLAB MPPI simulation used before integrating the planner into the ESP32 code
 - A cascaded controller with the structure `velocity -> target pitch -> pitch control -> left/right motor voltage split`
 - Encoder-based velocity estimation and 3-phase voltage generation for the BLDC motors
 - Bluetooth joystick control for forward motion, stop, and turning
@@ -27,7 +34,40 @@ This robot is not just a pair of wheels. I used `GM4108H-120T` BLDC wheel motors
 
 The main idea in this project was to separate "keeping the robot upright" from "making it move where I want."
 
-### 1. Main balancing loop
+At mission level, the stack is:
+
+```text
+Ground-station GPS waypoints
+-> GNSS/local x-y conversion
+-> waypoint manager
+-> MPPI planner: v_ref, w_ref
+-> velocity/yaw/pitch PID loops
+-> Vq_left, Vq_right
+-> BLDC inverse dq / 3-phase voltage output
+```
+
+### 1. Waypoint and MPPI command layer
+
+The autonomous navigation layer is implemented around `Gnss_Mppi`.
+
+- `gnss.c` stores the robot position as local `gnss_x`, `gnss_y` and converts waypoint data into local `goal_x`, `goal_y` coordinates.
+- `waypoint.c` advances through the waypoint list and marks the mission complete after the final waypoint is reached.
+- `mppi.c` reads the current state `[x, y, psi, v, w]` and samples candidate input sequences made of `[v_ref, w_ref]`.
+- `cost.c` scores each predicted trajectory with goal distance, obstacle distance, input size, and input smoothness costs.
+- The selected command updates `targetvel_vel` and `target_yaw_diff`, which are then followed by the existing balancing controller.
+
+The obstacle side uses a compact LiDAR representation. The firmware divides the 360-degree scan into `24` sectors and keeps the nearest obstacle in each sector. During cost evaluation, that sector distance and angle are converted into a world-coordinate obstacle point, and each predicted robot state is penalized if it enters the configured safe distance.
+
+The MPPI update itself follows the same receding-horizon pattern used in the MATLAB validation:
+
+1. Shift the previous best command sequence forward.
+2. Sample candidate command sequences around that base sequence.
+3. Predict future robot states for every candidate.
+4. Accumulate the trajectory cost.
+5. Convert costs into exponential weights with `lambda`.
+6. Compute the weighted command sequence and apply only the first input.
+
+### 2. Main balancing loop
 
 - `imu_timer_init()` runs the IMU-side update at `200 Hz`
 - `encoder_timer_init()` runs the encoder-side update at `1 kHz`
@@ -44,7 +84,7 @@ The control flow is simple in concept:
 
 In other words, the velocity controller decides how much the body should lean, and the pitch controller keeps the robot from falling while following that lean target.
 
-### 2. Why the velocity estimate is updated every 10 ms
+### 3. Why the velocity estimate is updated every 10 ms
 
 I still read the encoder angle at `1 kHz`, but I do not recompute the wheel velocity from a `1 ms` angle difference every cycle.
 
@@ -59,7 +99,7 @@ To reduce that effect, `encoder.c` updates the velocity estimate only once every
 
 In practice, this made the speed feedback much less sensitive to encoder noise without adding a large delay to the balancing controller.
 
-### 3. RTOS scheduling on the real robot
+### 4. RTOS scheduling on the real robot
 
 The semaphore-based scheduling in this repository was part of the real hardware code path, not just a simulation-side idea.
 
@@ -72,7 +112,7 @@ The semaphore-based scheduling in this repository was part of the real hardware 
 
 This detail mattered a lot on the real robot. Before I used semaphore-based wakeups, the motors vibrated badly because the balancing loop timing was not deterministic. After I made the encoder-triggered motor path higher priority than the IMU path, and woke it directly from the encoder ISR, the vibration disappeared.
 
-### 4. Joystick input
+### 5. Joystick input
 
 In `hc06.c`, I parse Bluetooth joystick packets in the `S,x,y,diff,E` format.
 
@@ -83,7 +123,7 @@ In `hc06.c`, I parse Bluetooth joystick packets in the `S,x,y,diff,E` format.
 
 Because of that structure, forward motion and turning are not handled as separate disconnected modes. The steering command is layered on top of the balancing controller.
 
-### 5. Joint control and expandable hardware
+### 6. Joint control and expandable hardware
 
 This robot also includes joint actuators, not just wheel control.
 
@@ -99,7 +139,58 @@ The balancing controller is the center of this repository, but the code is organ
 
 I did not tune this controller by repeatedly throwing the real robot onto the floor and hoping for the best. I checked it step by step.
 
-### 1. SILS
+### 1. MPPI MATLAB pre-validation
+
+Before relying on the ESP32 MPPI code, I built a MATLAB simulation that mirrors the command-sequence logic in `mppi.c`. The goal was not to simulate every hardware detail. It was to check whether the MPPI controller could generate reasonable `v_ref` and `w_ref` commands when a waypoint target and obstacle field were given.
+
+Simulation code:
+
+- `SoftWare/Mppi_matlab_simulation/main.m`
+- `SoftWare/Mppi_matlab_simulation/mppi/`
+- `SoftWare/Mppi_matlab_simulation/cost/`
+- `SoftWare/Mppi_matlab_simulation/sim/`
+
+MPPI simulation video:
+
+- [MPPI MATLAB simulation test](docs/videos/mppi_test.mp4)
+
+In the MATLAB test, the robot starts from a local coordinate frame, receives a goal point, samples candidate command sequences, and draws both the sampled rollouts and the final weighted MPPI trajectory. The simulation uses world-coordinate obstacle points, but the obstacle cost is reduced into `24` sectors so it stays close to the LiDAR-sector idea used in the ESP32 firmware.
+
+The main simulation parameters are:
+
+- `dt = 0.1 s`
+- `horizon = 30`, so the prediction window is `3.0 s`
+- `num_samples = 64`
+- `v_ref` range: `-0.5 m/s` to `0.5 m/s`
+- `w_ref` range: `-1.2 rad/s` to `1.2 rad/s`
+- `lambda = 10.0`
+- initialized-sequence noise: `v_amp = 0.30`, `w_amp = 0.80`
+- first-search noise: `v_amp = 0.40`, `w_amp = 0.90`
+
+The MATLAB cost function is:
+
+```text
+total_cost =
+  goal_cost
+  + obstacle_cost
+  + input_cost
+  + smooth_cost
+```
+
+The weights used in the checked simulation were:
+
+- `weight_goal_x = 1.5`
+- `weight_goal_y = 1.5`
+- `weight_obstacle = 120.0`
+- `weight_input_v = 0.1`
+- `weight_input_w = 0.1`
+- `weight_smooth_v = 0.3`
+- `weight_smooth_w = 0.3`
+- `obs_safe_dist = 1.0 m`
+
+This stage gave me a fast way to inspect whether the MPPI command generator was exploring enough candidate trajectories, whether the selected command sequence avoided obstacle clusters, and whether the final trajectory made sense before moving the logic into the ESP32 waypoint code.
+
+### 2. SILS
 
 I first used SILS to see whether the controller response made sense in theory.
 
@@ -109,7 +200,7 @@ I first used SILS to see whether the controller response made sense in theory.
 
 At this stage, I was mainly checking whether the response diverged, whether the controller could settle, and whether the balancing behavior looked realistic before I touched the real machine.
 
-### 2. HILS
+### 3. HILS
 
 After SILS, I built an HILS setup to verify that the real ESP32 firmware could exchange data correctly with the MATLAB/Simulink model.
 
@@ -174,7 +265,7 @@ On the Simulink side, `Serial Receive` reads the 24-byte payload first, and `Byt
 
 This stage let me verify the real firmware logic without repeatedly crashing the hardware during early tuning.
 
-### 3. Real robot testing
+### 4. Real robot testing
 
 After HILS, I moved to the physical robot and checked disturbance rejection, velocity response, and Bluetooth driving.
 
@@ -201,6 +292,7 @@ GitHub does not always render repository `mp4` files nicely inside `README.md`, 
 - [SILS yaw test video](docs/videos/sils_yaw_test.mp4)
 - [SILS target velocity test video](docs/videos/sils_target_velocity_test.mp4)
 - [SILS disturbance rejection test](docs/videos/sils_disturbance_rejection.mp4)
+- [MPPI MATLAB simulation test](docs/videos/mppi_test.mp4)
 - [Real-world disturbance rejection test](docs/videos/real_world_disturbance_rejection.mp4)
 - [Real-world hold-position test](docs/videos/real_world_hold_position_after_disturbance.mp4)
 - [Real-world Bluetooth driving test](docs/videos/real_world_bluetooth_control.mp4)
@@ -252,6 +344,8 @@ For the final balancing tests, the IMU I actually used was `WT901`.
 - `SoftWare/Physical_operation_code/rx28.c`, `SoftWare/Physical_operation_code/rx28.h`: RX-28 control
 - `SoftWare/Physical_operation_code/lidar.c`, `SoftWare/Physical_operation_code/lidar.h`: LiDAR expansion code
 - `SoftWare/Physical_operation_code/variable.h`: shared control variables and constants
+- `SoftWare/Gnss_Mppi/`: GNSS waypoint, LiDAR-sector obstacle, and MPPI command-generation firmware variant
+- `SoftWare/Mppi_matlab_simulation/`: MATLAB MPPI pre-validation code used before firmware integration
 - `SoftWare/hils_test_code/`: HILS-oriented ESP-IDF project variant
 
 ---
