@@ -1,5 +1,12 @@
 # ESP32 밸런싱로봇
 
+<p align="center">
+  <img src="https://img.shields.io/badge/MCU-ESP32--S3-25344F?style=for-the-badge&labelColor=555555" alt="MCU: ESP32-S3" />
+  <img src="https://img.shields.io/badge/FIRMWARE-C%20%2B%20FREERTOS-0C8D7B?style=for-the-badge&labelColor=555555" alt="Firmware: C and FreeRTOS" />
+  <img src="https://img.shields.io/badge/PROJECT-BALANCING%20ROBOT-C65D00?style=for-the-badge&labelColor=555555" alt="Project: Balancing Robot" />
+  <img src="https://img.shields.io/badge/CONTROL-MPPI%20%2B%20PID-1F5FDB?style=for-the-badge&labelColor=555555" alt="Control: MPPI and PID" />
+</p>
+
 `ESP32-S3` 기반 2륜 밸런싱로봇의 제어 코드와 검증 자료를 정리한 저장소이다.
 
 기지국에서 전달한 GPS 웨이포인트를 순서대로 따라가며 사람을 수색하는 구조를 목표로 한다. 로봇은 현재 위치와 목표점을 로컬 `x/y` 좌표로 변환한다. `MPPI` 제어기는 이 좌표를 바탕으로 목표 속도와 목표 각속도를 계산한다. 이 명령은 모터에 바로 전달되지 않는다. 속도, 자세, 요 제어용 `PID`를 거친 뒤 왼쪽과 오른쪽 바퀴의 `Vq` 명령으로 나뉜다. 마지막으로 엔코더 각도를 이용한 역 DQ 변환을 통해 BLDC 3상 전압으로 출력한다.
