@@ -149,7 +149,7 @@ void app_main(void) {
                 current_roll = 0.0f;
             }
 
-            roll_adj_mm = pid_calculate(&roll_ctrl, 0.0f, current_roll, 0.005f);// rx28제어할거면 주석해제//////////////////////////////////////////
+            //roll_adj_mm = pid_calculate(&roll_ctrl, 0.0f, current_roll, 0.005f);// rx28제어할거면 주석해제//////////////////////////////////////////
 
             static float target_pitch = 0.0f;   
 

@@ -12,7 +12,7 @@
 #include "driver/uart.h"
 
 
-#define MPPI_MAX_HORIZON 10
+#define MPPI_MAX_HORIZON 15
 #define MPPI_MAX_SAMPLES 64
 
 static const char *TAG = "MPPI";
@@ -301,7 +301,7 @@ void init_MPPI(void)
     mppi_params.weight_input_w = 0.1f;
 
     mppi_params.dt = 0.1f;
-    mppi_params.horizon = 6;//6샘플 앞을 관찰
+    mppi_params.horizon = 15;//6샘플 앞을 관찰
     mppi_params.num_samples = 64;
 
     mppi_params.v_min = -0.5f;

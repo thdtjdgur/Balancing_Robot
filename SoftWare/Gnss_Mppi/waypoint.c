@@ -41,7 +41,7 @@ void waypoint_start(void)
 
 void waypoint_update(void)
 {
-    if (!mission_active) {//mission_active는 웨이포인트 다 돌때까지 임1
+    if (!mission_active) {//mission_active는 모든웨이포인트 다 돌때까지 임1
         return;//처음 시작할때 한번만 들어옴
     }
 
