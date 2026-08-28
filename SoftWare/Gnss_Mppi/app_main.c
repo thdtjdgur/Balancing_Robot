@@ -96,11 +96,11 @@ void app_main(void) {
     i2c_master_dev_handle_t imu_handle = imu_init();// IMU 디바이스 초기화 및 핸들 획득
     encoder_init();//encoder통신 초기설정 (내부에서 encoder_sem도 생성함)
     init_mcpwm_bldc();//mcpwm초기설정
-    init_hc06();///hc06 초기설정
+    //init_hc06();///hc06 초기설정
     init_rx28();
     //init_MPPI();
     init_gnss();
-    //init_lidar();
+    init_lidar();
 
 
     xTaskCreate(motor_control_task, "Motor_Task", 4096, NULL, 5, NULL);
