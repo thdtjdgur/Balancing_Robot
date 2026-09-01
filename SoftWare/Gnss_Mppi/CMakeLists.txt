@@ -1,5 +1,5 @@
 idf_component_register(
-                    SRCS "waypoint.c" "mppi.c" "cost.c" "gnss.c" "lidar.c" "hc06.c" "rx28.c" "pwm.c" "pid.c" "imu.c" "encoder.c" "app_main.c"
+                    SRCS "waypoint.c" "mppi.c" "cost.c" "gnss.c" "lorartk.c" "rtk_bridge.c" "lora.c" "lidar.c" "hc06.c" "rx28.c" "pwm.c" "pid.c" "imu.c" "encoder.c" "app_main.c"
                     INCLUDE_DIRS "."
                     PRIV_REQUIRES 
                         esp_driver_gpio 

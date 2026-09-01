@@ -91,10 +91,16 @@ void station_waypoint_packet_received(const float *packet, int packet_len)
         station_lon[i] = packet[1 + (2 * i) + 1];
     }
 
-    if (gnss_ref_initialized) {//update_gnss_position함수에서 1됨. 
-    //이유는 rtk로 로봇의 위치를 알게 되었을때 그 점을 기준으로 웨이포인트 위도경고 값을 xy좌표로 변환 가능함
-        convert_station_waypoints_to_local_xy();
+    if (gnss_ref_initialized) { 
+    // update_gnss_position()이 한 번 호출되어
+    // 로봇의 첫 RTK 위치가 ref_latitude/ref_longitude에 저장된 상태.
+    // 즉 로봇 시작 위치가 local 좌표계의 (0,0)으로 설정됐다는 뜻.
+    // 따라서 기지국에서 받은 웨이포인트 위도/경도를
+    // 이 기준점 기준으로 모든 웨이포인트 각각을 x,y[m] 좌표로 변환할 수 있음.
+    convert_station_waypoints_to_local_xy();
     } else {
+    // 웨이포인트는 받았지만 아직 로봇 기준점이 없어서
+    // x,y 변환을 나중으로 미룸.
         station_waypoint_pending = 1;
     }
 }
@@ -106,14 +112,14 @@ int gnss_is_initialized(void)
     return gnss_ref_initialized;
 }
 
-//gnss rtk값 받는 함수 만들어서 그 안에서 호출애햐됨
+//gnss rtk값 받는 함수 만들어서 그 안에서 호출해야됨->추가함
 void update_gnss_position(float latitude, float longitude)//매개변수: gnss rtk모듈에서 받은 로봇의 위도, 경도임
 {
     // 처음 들어온 위치를 기준점으로 사용하고 함수호출. 그다음부터 위도, 경도 들어오면 기준점 위도, 경도를 사용해서 이동 계산
     if (!gnss_ref_initialized) {
-        ref_latitude = latitude;
-        ref_longitude = longitude;
-        gnss_ref_initialized = 1;
+        ref_latitude = latitude;//로봇의 시작 기준점
+        ref_longitude = longitude;//로봇의 시작 기준점
+        gnss_ref_initialized = 1;//지금 이후로 쭉 gnss_ref_initialized는 1임.
         gnss_x = 0.0f;
         gnss_y = 0.0f;
         if (station_waypoint_pending) {

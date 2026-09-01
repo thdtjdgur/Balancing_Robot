@@ -13,6 +13,8 @@
 #include "MPPI.h"
 #include "gnss.h"
 #include "waypoint.h"
+#include "lorartk.h"
+#include "driver/gpio.h"
 #include <math.h>
 
 // extern 선언들
@@ -79,12 +81,29 @@ void motor_control_task(void *pvParameters) {
     }
 }
 
+static void spi_shared_cs_idle_init(void)
+{
+    gpio_config_t cs_cfg = {
+        .pin_bit_mask = (1ULL << GPIO_NUM_8) | (1ULL << GPIO_NUM_9) | (1ULL << GPIO_NUM_10),
+        .mode = GPIO_MODE_OUTPUT,
+        .pull_up_en = GPIO_PULLUP_ENABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+
+    gpio_config(&cs_cfg);
+
+    gpio_set_level(GPIO_NUM_8, 1);   // LoRa CS 비선택
+    gpio_set_level(GPIO_NUM_9, 1);   // 왼쪽 AS5048A CS 비선택
+    gpio_set_level(GPIO_NUM_10, 1);  // 오른쪽 AS5048A CS 비선택
+}
 
 void app_main(void) {
     //세마포어 생성 (인터럽트와 태스크 동기화용)
     vTaskPrioritySet(NULL, 4); //메인문 태스크 우선순위 4
     imu_sem = xSemaphoreCreateBinary();
 
+    spi_shared_cs_idle_init();
 
     // PID 초기화
     pid_init(&vel_ctrl, 0.35f, 0.002f, 0.0001f, 0.3f);//10.0f는 (속도pid결과값 = 목표피치각도 한계값, 지금은 최대 3도)임. p=0.43, i=0.001, limit=0.3f
@@ -100,6 +119,7 @@ void app_main(void) {
     init_rx28();
     //init_MPPI();
     init_gnss();
+    init_lorartk();
     init_lidar();
 
 
@@ -128,8 +148,11 @@ void app_main(void) {
     
             //*****gnss웨이포인트관련 함수코드 작성한뒤 그 안에서 station_packet[], station_packet_len 채우기
             //*****또한 그 함수 안에서 마지막에 station_packet_ready를 1로 해줘야함
-            //*****gnss rtk보정값 받는코드 짜고, 그 안에서  update_gnss_position 함수 호출해야함. mppi제어주기로 호출하자
-            //*****기지국에서 로봇으로 웨이포인트 위도경도를 보내줘야함.
+            //*****기지국 RTCM 보정값은 LoRa로 받아서 ESP32가 UM982로 전달함.
+            //*****UM982는 RTCM을 이용해 RTK 위치를 계산하고, GGA 문장으로 현재 위도/경도를 ESP32에 보냄.
+            //*****ESP32는 GGA를 받을 때 update_gnss_position()을 호출해서 gnss_x, gnss_y를 갱신함.
+            //*****MPPI 주기가 10Hz이므로, UM982 GGA 출력도 10Hz로 맞추는 게 좋음.
+            //*****단, 현재 UM982 10Hz 출력 설정은 아직 안 함.
             if (station_packet_ready) {
                 gnss_receive_complete(station_packet, station_packet_len);
                 //station_packet는 웨이포인트 패킷 데이터 배열
@@ -138,6 +161,7 @@ void app_main(void) {
             }
 
             //convert_station_waypoints_to_local_xy 함수에서 station_waypoint_ready가 1이 됨
+            //즉 웨이포인트가 로컬좌표로 변환 완료되면 station_waypoint_ready가 1이 됨
             if (station_waypoint_ready) {
                 waypoint_start();
                 station_waypoint_ready = 0;

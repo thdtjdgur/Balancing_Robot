@@ -6,14 +6,15 @@
 #include "esp_log.h"
 #include "cost.h"
 #include "waypoint.h"
+#include "rtk_bridge.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include "driver/uart.h"
 
 
 #define MPPI_MAX_HORIZON 15
 #define MPPI_MAX_SAMPLES 64
+#define MPPI_COST_LOG_ENABLE 0
 
 static const char *TAG = "MPPI";
 
@@ -144,7 +145,7 @@ static float evaluate_input_sequence(const MPPI_State *start_state,
     MPPI_State pred_state = *start_state;
     MPPI_Input prev_input = prev_applied_input;
 
-    for (int t = 0; t < horizon; t++) {
+    for (int t = 0; t < horizon; t++) {//horizon: 15개
         pred_state = predict_next_state(&pred_state, &sequence[t]);
 
         total_cost += calc_goal_cost(&pred_state);
@@ -187,7 +188,31 @@ static void compute_sequence_weights(const float *costs, float *weights, int num
 }
 
 
-//모든 후보를 가중평균해서 최종 명령줄을 만드는 함수야.
+//모든 후보를 가중평균해서 최종 명령줄을 만드는 함수.
+// 예시: num_samples가 3개라고 가정
+//
+// sequences[0][t].v_ref = 0.10, weights[0] = 0.2
+// sequences[1][t].v_ref = 0.40, weights[1] = 0.7
+// sequences[2][t].v_ref = -0.20, weights[2] = 0.1
+//
+// v_sum = weights[0] * sequences[0][t].v_ref
+//       + weights[1] * sequences[1][t].v_ref
+//       + weights[2] * sequences[2][t].v_ref
+//
+// v_sum = 0.2 * 0.10
+//       + 0.7 * 0.40
+//       + 0.1 * (-0.20)
+//
+// v_sum = 0.02 + 0.28 - 0.02
+//       = 0.28
+//
+// 즉 weights[1]이 가장 크기 때문에
+// sequences[1][t].v_ref = 0.40이 최종 v_ref에 가장 많이 반영된다.
+//
+// MPPI는 1등 후보 하나만 고르는 게 아니라,
+// 좋은 후보는 많이, 나쁜 후보는 적게 섞어서
+// 최종 명령을 가중평균으로 만든다.
+
 //compute_weighted_sequence(best_sequence, sampled_sequences, sequence_weights, num_samples, horizon);
 static void compute_weighted_sequence(MPPI_Input *out_sequence,
                                       MPPI_Input sequences[MPPI_MAX_SAMPLES][MPPI_MAX_HORIZON],
@@ -226,6 +251,7 @@ static MPPI_State get_current_state(void)
 }
 
 //*****로그 출력 완료하면 지우기
+#if MPPI_COST_LOG_ENABLE
 static void send_cost_log_hc06(const MPPI_State *scan_origin_state,//*****
                                const MPPI_State *pred_state,
                                float label_cost)
@@ -271,6 +297,7 @@ static void send_cost_log_hc06(const MPPI_State *scan_origin_state,//*****
 
     uart_write_bytes(UART_NUM_2, tx_buf, len);
 }
+#endif
 
 
 
@@ -333,6 +360,17 @@ void MPPI_Task(void *pvParameters)
             num_samples = MPPI_MAX_SAMPLES;
         }
 
+        if (RTK_Bridge_GetGGAQuality() != 4) {
+            targetvel_vel = 0.0f;
+            target_yaw_diff = 0.0f;
+            sequence_initialized = 0;
+            prev_applied_input.v_ref = 0.0f;
+            prev_applied_input.w_ref = 0.0f;
+
+            vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(100));
+            continue;
+        }
+
         waypoint_update();
 
         if (!waypoint_is_active()) {//처음, 끝났을때 말고는 여기 안들어옴
@@ -356,10 +394,18 @@ void MPPI_Task(void *pvParameters)
         build_base_sequence(horizon);
 
         // 후보 명령표 여러 개 생성 및 비용 계산
-        for (int i = 0; i < num_samples; i++) {
+
+        // 방금 만든 i번째 후보 명령표를 현재 상태부터 순서대로 적용해본다.
+        // 1스텝 미래 예측 -> 그 상태 비용 계산
+        // 2스텝 미래 예측 -> 그 상태 비용 계산
+        // ...
+        // horizon스텝까지 반복하고, 모든 스텝 비용을 더해서
+        // 이 후보 명령표 하나의 총비용으로 저장한다.
+        //이 과정을 64번 반복한다.
+        for (int i = 0; i < num_samples; i++) {//num_samples 64개
             sample_input_sequence_from_base(sampled_sequences[i],
                                             base_sequence,
-                                            horizon);
+                                            horizon);//horizon: MPPI가 미래 몇 스텝까지 미리 예측할지
 
             sequence_costs[i] = evaluate_input_sequence(&current_state,
                                                         sampled_sequences[i],
@@ -377,6 +423,8 @@ void MPPI_Task(void *pvParameters)
                                   sequence_weights,
                                   num_samples,
                                   horizon);
+
+#if MPPI_COST_LOG_ENABLE
         
         MPPI_State log_pred_state = predict_next_state(&current_state, &best_sequence[0]);//*****로그 출력 완료하면 지우기
         float log_cost = calc_sector_obstacle_cost(&log_pred_state, &current_state);//*****로그 출력 완료하면 지우기
@@ -384,6 +432,7 @@ void MPPI_Task(void *pvParameters)
 
 
         // 최종 명령표의 첫 번째 입력만 실제 적용
+#endif
         targetvel_vel = best_sequence[0].v_ref;
         target_yaw_diff = best_sequence[0].w_ref;
 

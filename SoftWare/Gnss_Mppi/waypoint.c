@@ -3,7 +3,7 @@
 #include "gnss.h"
 #include "variable.h"
 
-#define WAYPOINT_REACH_RADIUS_M 0.7f //70cm이내로 들어오면 웨이포인트에 도착한걸로 간주
+#define WAYPOINT_REACH_RADIUS_M 1.0f //100cm이내로 들어오면 웨이포인트에 도착한걸로 간주
 #define WAYPOINT_REACH_CONFIRM_COUNT 5
 
 typedef struct {
@@ -45,7 +45,7 @@ void waypoint_update(void)
         return;//처음 시작할때 한번만 들어옴
     }
 
-    if (!goal_loaded) {//처음 시작할때 한번만 들어옴
+    if (!goal_loaded) {//처음 시작할때 한번만 들어옴. current_waypoint_idx를 통해 목표위치를 변경해나감
         goal_x = station_x[current_waypoint_idx];
         goal_y = station_y[current_waypoint_idx];
         goal_loaded = 1;
