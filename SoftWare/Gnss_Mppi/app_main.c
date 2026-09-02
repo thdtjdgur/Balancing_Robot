@@ -15,6 +15,7 @@
 #include "waypoint.h"
 #include "lorartk.h"
 #include "driver/gpio.h"
+#include "esp_log.h"
 #include <math.h>
 
 // extern 선언들
@@ -98,7 +99,16 @@ static void spi_shared_cs_idle_init(void)
     gpio_set_level(GPIO_NUM_10, 1);  // 오른쪽 AS5048A CS 비선택
 }
 
+static void configure_console_log_filter(void)
+{
+    esp_log_level_set("*", ESP_LOG_NONE);
+    esp_log_level_set("RTK_BRIDGE", ESP_LOG_INFO);
+    esp_log_level_set("MPPI_TEST", ESP_LOG_INFO);
+}
+
 void app_main(void) {
+    configure_console_log_filter();
+
     //세마포어 생성 (인터럽트와 태스크 동기화용)
     vTaskPrioritySet(NULL, 4); //메인문 태스크 우선순위 4
     imu_sem = xSemaphoreCreateBinary();
@@ -115,11 +125,11 @@ void app_main(void) {
     i2c_master_dev_handle_t imu_handle = imu_init();// IMU 디바이스 초기화 및 핸들 획득
     encoder_init();//encoder통신 초기설정 (내부에서 encoder_sem도 생성함)
     init_mcpwm_bldc();//mcpwm초기설정
-    //init_hc06();///hc06 초기설정
+    init_hc06();///hc06 초기설정
     init_rx28();
-    //init_MPPI();
+    init_MPPI();
     init_gnss();
-    init_lorartk();
+    //init_lorartk();
     init_lidar();
 
 
@@ -145,6 +155,12 @@ void app_main(void) {
 
             //실제 I2C 통신 수행 (ISR 밖이므로 안전)
             imu_data_cal(imu_handle);   
+
+            //앞, 혹은 뒤로 20도 기울어지면 강제 속도, 각속도 0으로 만들기
+            if (fabsf(current_pitch) > (20.0f * M_PI / 180.0f)) {
+                targetvel_vel = 0.0f;
+                target_yaw_diff = 0.0f;
+            }
     
             //*****gnss웨이포인트관련 함수코드 작성한뒤 그 안에서 station_packet[], station_packet_len 채우기
             //*****또한 그 함수 안에서 마지막에 station_packet_ready를 1로 해줘야함
@@ -207,34 +223,34 @@ void app_main(void) {
             float y_out = pid_calculate(&yaw_ctrl, target_yaw_diff, gyro, 0.005f);  
             //float y_out = target_yaw_diff * 0.03f;//target_yaw_diff의 단위는 도임, 0.1f
             
-            /*
+            
             float MAX_TURN_V = 1.5f;
             if (y_out > MAX_TURN_V) {
                 y_out = MAX_TURN_V;
             } else if (y_out < -MAX_TURN_V) {
                 y_out = -MAX_TURN_V;
             }
-            */
+            
 
-            float MAX_TURN_V = 1.5f;
-            float YAW_MIN_V  = 0.8f;
-            //MPPI구현할때 YAW출력전압을 0.8을 줬을때의 로봇의 각속도를 측정하여 그 값을
-            //최소 실현 가능한 각속도로 설정하자
-            float YAW_CMD_DEADBAND = 0.02f;   // 단위는 네 target_yaw_diff 단위에 맞춤
+            //float MAX_TURN_V = 1.5f;
+            // float YAW_MIN_V  = 0.8f;
+            // //MPPI구현할때 YAW출력전압을 0.8을 줬을때의 로봇의 각속도를 측정하여 그 값을
+            // //최소 실현 가능한 각속도로 설정하자
+            // float YAW_CMD_DEADBAND = 0.02f;   // 단위는 네 target_yaw_diff 단위에 맞춤
 
-            if (fabsf(target_yaw_diff) < YAW_CMD_DEADBAND) {
-                y_out = 0.0f;
-            } 
-            else {
-                if (y_out > 0.0f && y_out < YAW_MIN_V) {
-                    y_out = YAW_MIN_V;
-                } else if (y_out < 0.0f && y_out > -YAW_MIN_V) {
-                    y_out = -YAW_MIN_V;
-                }
-            }
+            // if (fabsf(target_yaw_diff) < YAW_CMD_DEADBAND) {
+            //     y_out = 0.0f;
+            // } 
+            // else {
+            //     if (y_out > 0.0f && y_out < YAW_MIN_V) {
+            //         y_out = YAW_MIN_V;
+            //     } else if (y_out < 0.0f && y_out > -YAW_MIN_V) {
+            //         y_out = -YAW_MIN_V;
+            //     }
+            // }
 
-            if (y_out > MAX_TURN_V) y_out = MAX_TURN_V;
-            else if (y_out < -MAX_TURN_V) y_out = -MAX_TURN_V;
+            // if (y_out > MAX_TURN_V) y_out = MAX_TURN_V;
+            // else if (y_out < -MAX_TURN_V) y_out = -MAX_TURN_V;
             
             // 좌우 전압 분배
             float pure_l = p_out + y_out;

@@ -22,6 +22,7 @@
 #define REG_IRQ_FLAGS_MASK       0x11
 #define REG_IRQ_FLAGS            0x12
 #define REG_RX_NB_BYTES          0x13
+#define REG_PAYLOAD_LENGTH       0x22
 #define REG_PKT_SNR_VALUE        0x19
 #define REG_PKT_RSSI_VALUE       0x1A
 #define REG_RSSI_VALUE           0x1B
@@ -31,6 +32,7 @@
 
 #define IRQ_PAYLOAD_CRC_ERROR    0x20
 #define IRQ_RX_DONE              0x40
+#define IRQ_TX_DONE              0x08
 
 static const char *TAG = "LORA";
 
@@ -272,6 +274,40 @@ int lora_receive_packet(uint8_t *buffer, uint8_t *length, uint8_t *irq_flags)
     lora_write(REG_IRQ_FLAGS, 0xFF);
 
     return 1;
+}
+
+bool lora_send_packet(const uint8_t *buffer, uint8_t length, uint32_t timeout_ms)
+{
+    uint32_t start_tick;
+
+    if (!lora_initialized || buffer == NULL || length == 0) {
+        return false;
+    }
+
+    lora_write(REG_OP_MODE, LORA_STANDBY);
+    lora_write(REG_IRQ_FLAGS, 0xFF);
+    lora_write(REG_FIFO_ADDR_PTR, 0x80);
+    lora_write_burst(REG_FIFO, buffer, length);
+    lora_write(REG_PAYLOAD_LENGTH, length);
+    lora_write(REG_DIO_MAPPING_1, 0x40); // DIO0 = TxDone
+    lora_write(REG_OP_MODE, LORA_TX);
+
+    start_tick = xTaskGetTickCount();
+    while ((lora_read(REG_IRQ_FLAGS) & IRQ_TX_DONE) == 0U) {
+        uint32_t elapsed_ms = (uint32_t)((xTaskGetTickCount() - start_tick) * portTICK_PERIOD_MS);
+
+        if (elapsed_ms >= timeout_ms) {
+            lora_write(REG_OP_MODE, LORA_STANDBY);
+            lora_write(REG_IRQ_FLAGS, 0xFF);
+            return false;
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(1));
+    }
+
+    lora_write(REG_OP_MODE, LORA_STANDBY);
+    lora_write(REG_IRQ_FLAGS, 0xFF);
+    return true;
 }
 
 bool lora_take_rx_flag(void)

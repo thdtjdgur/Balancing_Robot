@@ -113,6 +113,7 @@ int gnss_is_initialized(void)
 }
 
 //gnss rtk값 받는 함수 만들어서 그 안에서 호출해야됨->추가함
+//update_gnss_position(latitude, longitude);
 void update_gnss_position(float latitude, float longitude)//매개변수: gnss rtk모듈에서 받은 로봇의 위도, 경도임
 {
     // 처음 들어온 위치를 기준점으로 사용하고 함수호출. 그다음부터 위도, 경도 들어오면 기준점 위도, 경도를 사용해서 이동 계산

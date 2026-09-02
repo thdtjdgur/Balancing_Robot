@@ -15,6 +15,7 @@
 #define MPPI_MAX_HORIZON 15
 #define MPPI_MAX_SAMPLES 64
 #define MPPI_COST_LOG_ENABLE 0
+#define MPPI_HEADING_MAX_AGE_MS 500U
 
 static const char *TAG = "MPPI";
 
@@ -49,6 +50,7 @@ static float clampf_local(float value, float min_value, float max_value)
 //미래상태 예측 함수
 //현재 상태와 현재 명령(v_ref, w_ref)을 바탕으로
 //dt 뒤의 다음 상태를 예측하는 함수
+//pred_state = predict_next_state(&pred_state, &sequence[t]);
 static MPPI_State predict_next_state(const MPPI_State *state, const MPPI_Input *input)
 {
     MPPI_State next_state = *state;
@@ -120,7 +122,9 @@ static void sample_input_sequence_from_base(MPPI_Input *dst,
     float noise_w = rand_symmetric(w_amp);
 
     for (int t = 0; t < horizon; t++) {
-        // 시간적으로 완전히 독립이 아니라 조금 연속된 노이즈가 되도록 만듦
+        // 시간적으로 완전히 독립이 아니라 조금 연속된 노이즈가 되도록 만듦. 
+        // 왜냐면 이전 노이즈 70프로, 현재 노이즈 30프로를 더한값을 사용하기 때문에 만약 이전 노이즈가 0.8이고 지금 노이즈가
+        //0.2이면 0.8에서 0.2가 조금 영향을 미치게 되어 noise_v도 0.8에서 조금만 변하게 됨. 이해 ㄱㄱ
         noise_v = 0.7f * noise_v + 0.3f * rand_symmetric(v_amp);
         noise_w = 0.7f * noise_w + 0.3f * rand_symmetric(w_amp);
 
@@ -240,10 +244,13 @@ static void compute_weighted_sequence(MPPI_Input *out_sequence,
 static MPPI_State get_current_state(void)
 {
     MPPI_State state;
+    float heading_rad = current_yaw;
+
+    (void)RTK_Bridge_GetHeadingRad(&heading_rad);
 
     state.x = gnss_x;         // 현재 로봇의 로컬 x 위치 [m]
     state.y = gnss_y;         // 현재 로봇의 로컬 y 위치 [m]
-    state.psi = current_yaw;  // 현재 로봇 heading [rad]
+    state.psi = heading_rad;  // UM982 dual-antenna heading [rad]
     state.v = current_vel;    // 현재 로봇 전진속도 [m/s]
     state.w = gyro;           // 현재 로봇 회전속도 [rad/s]
 
@@ -316,10 +323,10 @@ float wrap_to_pi(float angle)
 void init_MPPI(void)
 {
     //기본값 세팅
-    mppi_params.weight_goal_x = 1.0f;
-    mppi_params.weight_goal_y = 1.0f;
+    mppi_params.weight_goal_x = 1.5f;
+    mppi_params.weight_goal_y = 1.5f;
     //mppi_params.weight_heading = 0.5f;
-    mppi_params.weight_obstacle = 2.0f;
+    mppi_params.weight_obstacle = 100.0f;
 
     mppi_params.weight_smooth_v = 0.3f;
     mppi_params.weight_smooth_w = 0.3f;
@@ -328,7 +335,7 @@ void init_MPPI(void)
     mppi_params.weight_input_w = 0.1f;
 
     mppi_params.dt = 0.1f;
-    mppi_params.horizon = 15;//6샘플 앞을 관찰
+    mppi_params.horizon = 15;//15샘플 앞을 관찰
     mppi_params.num_samples = 64;
 
     mppi_params.v_min = -0.5f;
@@ -360,7 +367,9 @@ void MPPI_Task(void *pvParameters)
             num_samples = MPPI_MAX_SAMPLES;
         }
 
-        if (RTK_Bridge_GetGGAQuality() != 4) {
+        uint8_t gga_quality = RTK_Bridge_GetGGAQuality();
+        if ((gga_quality != 4 && gga_quality != 5) ||
+            !RTK_Bridge_HasFreshHeading(MPPI_HEADING_MAX_AGE_MS)) {
             targetvel_vel = 0.0f;
             target_yaw_diff = 0.0f;
             sequence_initialized = 0;
@@ -435,6 +444,15 @@ void MPPI_Task(void *pvParameters)
 #endif
         targetvel_vel = best_sequence[0].v_ref;
         target_yaw_diff = best_sequence[0].w_ref;
+
+        static int mppi_test_log_cnt = 0;
+        if (++mppi_test_log_cnt >= 5) {
+            mppi_test_log_cnt = 0;
+            ESP_LOGI("MPPI_TEST", "w_ref=%.3f psi=%.3f deg=%.1f",
+                     target_yaw_diff,
+                     current_state.psi,
+                     current_state.psi * 180.0f / M_PI);
+        }
 
         prev_applied_input = best_sequence[0];
         sequence_initialized = 1;

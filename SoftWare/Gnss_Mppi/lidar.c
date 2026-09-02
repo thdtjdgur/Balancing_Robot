@@ -112,7 +112,7 @@ void lidar_event_task(void *pvParameters)
     uint8_t reset_cmd[] = {0xA5, 0x40};
     uart_write_bytes(UART_NUM_1, reset_cmd, 2);
     uart_wait_tx_done(UART_NUM_1, portMAX_DELAY); // ★ 수면 모드 방지: 전송 완료까지 CPU 대기!
-    esp_rom_printf("Soft Restart Command Sent (0xA5 0x40)\n");
+    // esp_rom_printf("Soft Restart Command Sent (0xA5 0x40)\n");
     
     vTaskDelay(1500 / portTICK_PERIOD_MS); // 라이다 재부팅 시간 1.5초 대기
 
@@ -120,7 +120,7 @@ void lidar_event_task(void *pvParameters)
     uint8_t start_cmd[] = {0xA5, 0x60};
     uart_write_bytes(UART_NUM_1, start_cmd, 2);
     uart_wait_tx_done(UART_NUM_1, portMAX_DELAY); // ★ 수면 모드 방지: 전송 완료까지 CPU 대기!
-    esp_rom_printf("Scan Start Command Sent (0xA5 0x60)\n");
+    // esp_rom_printf("Scan Start Command Sent (0xA5 0x60)\n");
 
     for(;;) {
         if(xQueueReceive(lidar_uart_queue, (void * )&event, pdMS_TO_TICKS(2000))) {
@@ -180,7 +180,7 @@ void lidar_event_task(void *pvParameters)
             }
             else if(event.type == UART_FIFO_OVF)
             {
-                esp_rom_printf("Lidar UART FIFO Overflow!\n");
+                // esp_rom_printf("Lidar UART FIFO Overflow!\n");
                 uart_flush_input(UART_NUM_1);
                 xQueueReset(lidar_uart_queue);
             }
@@ -197,7 +197,8 @@ void lidar_event_task(void *pvParameters)
             // 2초 동안 큐에 아무 이벤트(데이터)가 안 들어왔다면 라이다가 멈춰있다고 판단하고 강제로 스캔 명령 재전송
             int sent_bytes = uart_write_bytes(UART_NUM_1, start_cmd, 2);
             uart_wait_tx_done(UART_NUM_1, portMAX_DELAY); // 수면 모드 방지: 전송 완료까지 CPU 대기
-            esp_rom_printf("라이다 침묵 중... 명령 재전송 시도! (결과: %d 바이트 씀)\n", sent_bytes);
+            (void)sent_bytes;
+            // esp_rom_printf("라이다 침묵 중... 명령 재전송 시도! (결과: %d 바이트 씀)\n", sent_bytes);
         }
     }
     free(rx_buf);
