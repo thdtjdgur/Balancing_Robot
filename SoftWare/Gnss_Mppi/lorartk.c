@@ -13,6 +13,7 @@
 #include "gnss.h"
 #include "lora.h"
 #include "rtk_bridge.h"
+#include "variable.h"
 
 #define TTGO_PACKET_SINGLE        0xA1U
 #define TTGO_PACKET_FRAGMENT      0xA2U
@@ -22,7 +23,8 @@
 #define DRONE_PACKET_ID           0xFEU
 #define DRONE_GPS_MESSAGE         0xF3U
 #define DRONE_GPS_POSITION_COUNT  1U
-#define DRONE_GPS_PACKET_SIZE     14U
+#define DRONE_GPS_PACKET_SIZE     22U
+#define DRONE_TELEMETRY_RAD_SCALE 1000000.0f
 #define TTGO_SINGLE_HEADER_SIZE   2U
 #define TTGO_FRAGMENT_HEADER_SIZE 4U
 #define WAYPOINT_HEADER_SIZE      3U
@@ -268,6 +270,10 @@ static void send_latest_gga_to_ground(void)
     uint8_t packet[DRONE_GPS_PACKET_SIZE] = {0};
     int32_t latitude_scaled;
     int32_t longitude_scaled;
+    int32_t psi_scaled;
+    int32_t w_scaled;
+    float psi_rad = 0.0f;
+    bool heading_valid;
     bool sent;
 
     if (!RTK_Bridge_GetLatestGGA(&gga)) {
@@ -281,6 +287,9 @@ static void send_latest_gga_to_ground(void)
 
     latitude_scaled = (int32_t)lroundf(gga.latitude * WAYPOINT_COORD_SCALE);
     longitude_scaled = (int32_t)lroundf(gga.longitude * WAYPOINT_COORD_SCALE);
+    heading_valid = RTK_Bridge_GetHeadingRad(&psi_rad);
+    psi_scaled = (int32_t)lroundf(psi_rad * DRONE_TELEMETRY_RAD_SCALE);
+    w_scaled = (int32_t)lroundf(target_yaw_diff * DRONE_TELEMETRY_RAD_SCALE);
 
     packet[0] = DRONE_PACKET_ID;
     packet[1] = gps_sequence++;
@@ -290,6 +299,8 @@ static void send_latest_gga_to_ground(void)
     write_i32_le(&packet[8], longitude_scaled);
     packet[12] = latest_detected_flag;
     packet[13] = latest_person_count;
+    write_i32_le(&packet[14], psi_scaled);
+    write_i32_le(&packet[18], w_scaled);
 
     vTaskDelay(pdMS_TO_TICKS(GPS_RESPONSE_GUARD_MS));
     drain_lora_irq_flags();
@@ -304,23 +315,29 @@ static void send_latest_gga_to_ground(void)
         interval.gps_responses++;
         if (isfinite(gga.differential_age)) {
             ESP_LOGI(TAG,
-                     "[GPS TX] lat=%.8f, lon=%.8f, quality=%u, age=%.2f s, sample_age=%" PRIu32 " ms, det=%u, count=%u",
+                     "[GPS TX] lat=%.8f, lon=%.8f, quality=%u, age=%.2f s, sample_age=%" PRIu32 " ms, det=%u, count=%u, psi=%.4f rad, w=%.4f rad/s, heading_valid=%u",
                      gga.latitude,
                      gga.longitude,
                      (unsigned)gga.quality,
                      gga.differential_age,
                      sample_age_ms,
                      (unsigned)latest_detected_flag,
-                     (unsigned)latest_person_count);
+                     (unsigned)latest_person_count,
+                     psi_rad,
+                     target_yaw_diff,
+                     heading_valid ? 1U : 0U);
         } else {
             ESP_LOGI(TAG,
-                     "[GPS TX] lat=%.8f, lon=%.8f, quality=%u, age=nan, sample_age=%" PRIu32 " ms, det=%u, count=%u",
+                     "[GPS TX] lat=%.8f, lon=%.8f, quality=%u, age=nan, sample_age=%" PRIu32 " ms, det=%u, count=%u, psi=%.4f rad, w=%.4f rad/s, heading_valid=%u",
                      gga.latitude,
                      gga.longitude,
                      (unsigned)gga.quality,
                      sample_age_ms,
                      (unsigned)latest_detected_flag,
-                     (unsigned)latest_person_count);
+                     (unsigned)latest_person_count,
+                     psi_rad,
+                     target_yaw_diff,
+                     heading_valid ? 1U : 0U);
         }
         ESP_LOGI(TAG, "[GPS TX] done -> RX");
     } else {

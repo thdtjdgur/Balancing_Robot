@@ -103,7 +103,6 @@ static void configure_console_log_filter(void)
 {
     esp_log_level_set("*", ESP_LOG_NONE);
     esp_log_level_set("RTK_BRIDGE", ESP_LOG_INFO);
-    esp_log_level_set("MPPI_TEST", ESP_LOG_INFO);
 }
 
 void app_main(void) {
@@ -125,11 +124,11 @@ void app_main(void) {
     i2c_master_dev_handle_t imu_handle = imu_init();// IMU 디바이스 초기화 및 핸들 획득
     encoder_init();//encoder통신 초기설정 (내부에서 encoder_sem도 생성함)
     init_mcpwm_bldc();//mcpwm초기설정
-    init_hc06();///hc06 초기설정
+    //init_hc06();///hc06 초기설정
     init_rx28();
     init_MPPI();
     init_gnss();
-    //init_lorartk();
+    init_lorartk();
     init_lidar();
 
 
@@ -139,7 +138,7 @@ void app_main(void) {
     //즉 encoder_to_vcc_cal함수 안에서 선언한 float angle_l, float pure_l같은 변수와 prinf같은 도구가 이 메모리공간에 저장됨
     //if, while, cosf같은 명령어와 전역변수 current_vel, encoder_sem는 flash메모리에 저장됨
     xTaskCreate(rx28_task, "RX28_Task", 4096, NULL, 3, NULL);
-    //xTaskCreate(MPPI_Task, "MPPI_Task", 4096, NULL, 2, NULL);
+    xTaskCreate(MPPI_Task, "MPPI_Task", 4096, NULL, 2, NULL);
     imu_timer_init();// imu 타이머 모듈 초기화 (200Hz 인터럽트 시작)
     encoder_timer_init();// 엔코더 타이머 모듈 초기화 (1KHz 인터럽트 시작)
 
@@ -221,7 +220,7 @@ void app_main(void) {
             float p_out = pid_calculate(&pitch_ctrl, target_pitch, current_pitch, 0.005f);
 
             float y_out = pid_calculate(&yaw_ctrl, target_yaw_diff, gyro, 0.005f);  
-            //float y_out = target_yaw_diff * 0.03f;//target_yaw_diff의 단위는 도임, 0.1f
+            //float y_out = target_yaw_diff * 0.03f;//target_yaw_diff의 단위는 라디안임, 0.1f
             
             
             float MAX_TURN_V = 1.5f;
