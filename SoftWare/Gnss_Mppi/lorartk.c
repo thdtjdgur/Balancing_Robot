@@ -23,7 +23,7 @@
 #define DRONE_PACKET_ID           0xFEU
 #define DRONE_GPS_MESSAGE         0xF3U
 #define DRONE_GPS_POSITION_COUNT  1U
-#define DRONE_GPS_PACKET_SIZE     22U
+#define DRONE_GPS_PACKET_SIZE     23U
 #define DRONE_TELEMETRY_RAD_SCALE 1000000.0f
 #define TTGO_SINGLE_HEADER_SIZE   2U
 #define TTGO_FRAGMENT_HEADER_SIZE 4U
@@ -301,6 +301,7 @@ static void send_latest_gga_to_ground(void)
     packet[13] = latest_person_count;
     write_i32_le(&packet[14], psi_scaled);
     write_i32_le(&packet[18], w_scaled);
+    packet[22] = gga.quality;
 
     vTaskDelay(pdMS_TO_TICKS(GPS_RESPONSE_GUARD_MS));
     drain_lora_irq_flags();
@@ -798,7 +799,7 @@ void init_lorartk(void)
              "[RADIO] SX1276 version=0x%02X, 922.1 MHz, SF7, BW125, CR4/5, Explicit, CRC ON",
              lora_read(0x42));
     ESP_LOGI(TAG,
-             "[PACKET] A1=[type,seq,RTCM], A2=[type,seq,index,count,data], A3=DOWNLINK_END, Waypoint=[FF,F2,count,lat/lon...], uplink=[FE,seq,F3,1,lat,lon,det,count]");
+             "[PACKET] A1=[type,seq,RTCM], A2=[type,seq,index,count,data], A3=DOWNLINK_END, Waypoint=[FF,F2,count,lat/lon...], uplink=[FE,seq,F3,1,lat,lon,det,count,psi,w,quality]");
     ESP_LOGI(TAG, "[UART] UM982 ESP_TX=%d ESP_RX=%d, %d 8N1; USB debug 115200",
              UM982_TX_PIN, UM982_RX_PIN, UM982_BAUD_RATE);
     ESP_LOGI(TAG, "[GNSS] Expected GGA=%u Hz, RX buffer=4096 bytes",

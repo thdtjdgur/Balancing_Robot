@@ -208,7 +208,7 @@ void encoder_to_vcc_cal(void)
     
     vel_calc_counter++;
     
-    if (vel_calc_counter >= 10) { 
+    if (vel_calc_counter >= 20) { 
     // 1KHz 루프가 10번 돌 때마다(10ms) 딱 1번만 진입.
     // 이유는 1khz마다 조건문을 들어온다고 했을때 그 순간의 각도 변화량이 미세하기때문에
     // 엔코더 각도 측정값이 오차로 인해 조금만 흔들려도 속도 = 각도변화량 / 시간 에 의해 현재속도가 엄청 커짐.
@@ -221,14 +221,17 @@ void encoder_to_vcc_cal(void)
         if (diff_l > M_PI) diff_l -= 2.0f * M_PI;
         // 각도 차이가 -180도(-PI)보다 작으면, 앞으로 한 바퀴 돈 것!
         else if (diff_l < -M_PI) diff_l += 2.0f * M_PI;
-        float omega_l = diff_l / 0.010f;
+        float omega_l = diff_l / 0.020f;
         omega_l_meas = omega_l;
 
         float diff_r = angle_r - prev_angle_r;
         if (diff_r > M_PI) diff_r -= 2.0f * M_PI;
         else if (diff_r < -M_PI) diff_r += 2.0f * M_PI;
-        float omega_r = diff_r / 0.010f;
+        float omega_r = diff_r / 0.020f;
         omega_r_meas = omega_r;
+
+        omega_l_meas = 0.7f * omega_l_meas + 0.3f * omega_l;
+        omega_r_meas = 0.7f * omega_r_meas + 0.3f * omega_r;
         
         // 2. 날것의 선속도(raw_vel) 계산
         float raw_vel = ((omega_l - omega_r) / 2.0f) * WHEEL_RADIUS; 

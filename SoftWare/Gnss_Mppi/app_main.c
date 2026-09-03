@@ -38,7 +38,7 @@ float omega_l_meas = 0.0f;
 float omega_r_meas = 0.0f;
 
 // PID 제어기 및 전압 변수 선언
-PIDController pitch_ctrl, vel_ctrl, roll_ctrl, yaw_ctrl;
+PIDController pitch_ctrl, vel_ctrl, roll_ctrl, yaw_ctrl, wheel_l_ctrl, wheel_r_ctrl;
 float Vq_left = 0, Vq_right = 0;
 const float MOTOR_V_MIN = 0.0f;//1.5 // 실험으로 찾을 최소 구동 전압
 
@@ -119,7 +119,8 @@ void app_main(void) {
     pid_init(&pitch_ctrl, 30.0f, 0.0f, 0.21f, 15.0f);//속도 pid에서 0.174라디안(10도)이 넘어왔을때 kp=100을 곱하면 17.4가 나옴(p=60 d=0.4, limit=15.0f)
     pid_init(&yaw_ctrl, 0.4f, 0.0f, 0.0001f, 2.0f);//목표요를 0.4rad(20도)로 했을때 kp=20을 곱하면 8이 나옴
     pid_init(&roll_ctrl, 2.0f, 0.10f, 0.01f, 150.0f);//v_limit=50.0f (장애물 높이 150mm까지 대응하도록 제한)
-     
+    pid_init(&wheel_l_ctrl, 0.10f, 0.000f, 0.000f, 2.0f);
+    pid_init(&wheel_r_ctrl, 0.10f, 0.000f, 0.000f, 2.0f); 
 
     i2c_master_dev_handle_t imu_handle = imu_init();// IMU 디바이스 초기화 및 핸들 획득
     encoder_init();//encoder통신 초기설정 (내부에서 encoder_sem도 생성함)
@@ -155,10 +156,19 @@ void app_main(void) {
             //실제 I2C 통신 수행 (ISR 밖이므로 안전)
             imu_data_cal(imu_handle);   
 
-            //앞, 혹은 뒤로 20도 기울어지면 강제 속도, 각속도 0으로 만들기
-            if (fabsf(current_pitch) > (20.0f * M_PI / 180.0f)) {
+            if (fabsf(current_pitch) > (25.0f * M_PI / 180.0f)) {
                 targetvel_vel = 0.0f;
                 target_yaw_diff = 0.0f;
+
+                Vq_left = 0.0f;
+                Vq_right = 0.0f;
+
+                vel_ctrl.err_sum = 0.0f;
+                pitch_ctrl.err_sum = 0.0f;
+                yaw_ctrl.err_sum = 0.0f;
+                wheel_l_ctrl.err_sum = 0.0f;
+                wheel_r_ctrl.err_sum = 0.0f;
+                continue;
             }
     
             //*****gnss웨이포인트관련 함수코드 작성한뒤 그 안에서 station_packet[], station_packet_len 채우기
@@ -219,41 +229,13 @@ void app_main(void) {
             //float p_out = pid_calculate(&pitch_ctrl, target_pitch, current_pitch, 0.005f); //피치pid의 목표피치를 0으로 하고 안정화되면 아 주석 pid값 맞추기
             float p_out = pid_calculate(&pitch_ctrl, target_pitch, current_pitch, 0.005f);
 
-            float y_out = pid_calculate(&yaw_ctrl, target_yaw_diff, gyro, 0.005f);  
-            //float y_out = target_yaw_diff * 0.03f;//target_yaw_diff의 단위는 라디안임, 0.1f
-            
-            
-            float MAX_TURN_V = 1.5f;
-            if (y_out > MAX_TURN_V) {
-                y_out = MAX_TURN_V;
-            } else if (y_out < -MAX_TURN_V) {
-                y_out = -MAX_TURN_V;
-            }
-            
+            float yaw_wheel_ref = target_yaw_diff * WHEEL_BASE / (2.0f * WHEEL_RADIUS);
 
-            //float MAX_TURN_V = 1.5f;
-            // float YAW_MIN_V  = 0.8f;
-            // //MPPI구현할때 YAW출력전압을 0.8을 줬을때의 로봇의 각속도를 측정하여 그 값을
-            // //최소 실현 가능한 각속도로 설정하자
-            // float YAW_CMD_DEADBAND = 0.02f;   // 단위는 네 target_yaw_diff 단위에 맞춤
+            float wheel_l_out = pid_calculate(&wheel_l_ctrl, yaw_wheel_ref, omega_l_meas, 0.005f);
+            float wheel_r_out = pid_calculate(&wheel_r_ctrl, yaw_wheel_ref, omega_r_meas, 0.005f);
 
-            // if (fabsf(target_yaw_diff) < YAW_CMD_DEADBAND) {
-            //     y_out = 0.0f;
-            // } 
-            // else {
-            //     if (y_out > 0.0f && y_out < YAW_MIN_V) {
-            //         y_out = YAW_MIN_V;
-            //     } else if (y_out < 0.0f && y_out > -YAW_MIN_V) {
-            //         y_out = -YAW_MIN_V;
-            //     }
-            // }
-
-            // if (y_out > MAX_TURN_V) y_out = MAX_TURN_V;
-            // else if (y_out < -MAX_TURN_V) y_out = -MAX_TURN_V;
-            
-            // 좌우 전압 분배
-            float pure_l = p_out + y_out;
-            float pure_r = p_out - y_out;
+            float pure_l = p_out + wheel_l_out;
+            float pure_r = p_out - wheel_r_out;
 
             float MOTOR_V_MIN = 0.10f; // 모터가 꿈쩍하기 시작하는 최소 전압
 
