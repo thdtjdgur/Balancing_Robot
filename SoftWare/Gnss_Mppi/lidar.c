@@ -90,9 +90,9 @@ void parse_lidar_packet(uint8_t *buf, int len) {
         distance_map[angle_idx] = dist_mm;
 
         // 0도(정면) 데이터 출력
-        //if (angle_idx == 0) {
-        //    esp_rom_printf("정면(0도) 거리: %d mm\n", (int)dist_mm);
-        //}
+        if (angle_idx == 0) {
+            esp_rom_printf("정면(0도) 거리: %d mm\n", (int)dist_mm);
+        }
     }
 }
 
@@ -110,16 +110,16 @@ void lidar_event_task(void *pvParameters)
 
     // [핵심 해결책 3] 라이다 기절 방지용 Soft Restart (0xA5 0x40) 먼저 발사
     uint8_t reset_cmd[] = {0xA5, 0x40};
-    uart_write_bytes(UART_NUM_1, reset_cmd, 2);
-    uart_wait_tx_done(UART_NUM_1, portMAX_DELAY); // ★ 수면 모드 방지: 전송 완료까지 CPU 대기!
+    //uart_write_bytes(UART_NUM_1, reset_cmd, 2);
+    //uart_wait_tx_done(UART_NUM_1, portMAX_DELAY); // ★ 수면 모드 방지: 전송 완료까지 CPU 대기!
     // esp_rom_printf("Soft Restart Command Sent (0xA5 0x40)\n");
     
     vTaskDelay(1500 / portTICK_PERIOD_MS); // 라이다 재부팅 시간 1.5초 대기
 
     // 시스템 커맨드: 라이다 스캔 시작 (0xA5 0x60)
     uint8_t start_cmd[] = {0xA5, 0x60};
-    uart_write_bytes(UART_NUM_1, start_cmd, 2);
-    uart_wait_tx_done(UART_NUM_1, portMAX_DELAY); // ★ 수면 모드 방지: 전송 완료까지 CPU 대기!
+    // uart_write_bytes(UART_NUM_1, start_cmd, 2);
+    // uart_wait_tx_done(UART_NUM_1, portMAX_DELAY); // ★ 수면 모드 방지: 전송 완료까지 CPU 대기!
     // esp_rom_printf("Scan Start Command Sent (0xA5 0x60)\n");
 
     for(;;) {
@@ -198,7 +198,7 @@ void lidar_event_task(void *pvParameters)
             int sent_bytes = uart_write_bytes(UART_NUM_1, start_cmd, 2);
             uart_wait_tx_done(UART_NUM_1, portMAX_DELAY); // 수면 모드 방지: 전송 완료까지 CPU 대기
             (void)sent_bytes;
-            // esp_rom_printf("라이다 침묵 중... 명령 재전송 시도! (결과: %d 바이트 씀)\n", sent_bytes);
+            esp_rom_printf("라이다 침묵 중... 명령 재전송 시도! (결과: %d 바이트 씀)\n", sent_bytes);
         }
     }
     free(rx_buf);
@@ -234,5 +234,5 @@ void init_lidar()
     // [핵심 해결책 1] RX 핀이 0V로 죽어서 UART_BREAK 에러가 뜨는 것을 막기 위해 내부 풀업 저항 강제 활성화!
     gpio_set_pull_mode(RX_PIN, GPIO_PULLUP_ONLY);
 
-    xTaskCreate(lidar_event_task, "lidar_event_task", 8192, NULL, 3, NULL);
+    xTaskCreate(lidar_event_task, "lidar_event_task", 8192, NULL, 1, NULL);
 }

@@ -6,11 +6,11 @@
 #include "driver/spi_master.h"
 #include "esp_err.h"
 
-#define LORA_SPI_HOST SPI2_HOST
+#define LORA_SPI_HOST SPI3_HOST
 #define LORA_PIN_CS   8
-#define LORA_PIN_SCK  12
-#define LORA_PIN_MISO 13
-#define LORA_PIN_MOSI 11
+#define LORA_PIN_SCK  36
+#define LORA_PIN_MISO 37
+#define LORA_PIN_MOSI 35
 #define LORA_PIN_EN   6
 #define LORA_PIN_RST  14
 #define LORA_PIN_DIO0 38

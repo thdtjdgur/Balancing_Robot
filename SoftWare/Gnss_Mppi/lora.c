@@ -207,6 +207,18 @@ esp_err_t lora_init(void)
     gpio_set_level(LORA_PIN_RST, 1);
     vTaskDelay(pdMS_TO_TICKS(10));
 
+    spi_bus_config_t buscfg = {
+        .miso_io_num = LORA_PIN_MISO,
+        .mosi_io_num = LORA_PIN_MOSI,
+        .sclk_io_num = LORA_PIN_SCK,
+        .quadwp_io_num = -1,
+        .quadhd_io_num = -1,
+    };
+    esp_err_t err = spi_bus_initialize(LORA_SPI_HOST, &buscfg, SPI_DMA_CH_AUTO);
+    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
+        ESP_RETURN_ON_ERROR(err, TAG, "spi_bus_initialize failed");
+    }
+
     spi_device_interface_config_t devcfg = {
         .clock_speed_hz = 2000000,
         .mode = 0,
@@ -225,7 +237,7 @@ esp_err_t lora_init(void)
     };
     ESP_RETURN_ON_ERROR(gpio_config(&dio_cfg), TAG, "dio0 gpio config failed");
 
-    esp_err_t err = gpio_install_isr_service(0);
+    err = gpio_install_isr_service(0);
     if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
         ESP_RETURN_ON_ERROR(err, TAG, "gpio isr service install failed");
     }
