@@ -22,7 +22,7 @@ typedef struct {
 typedef struct {
     float weight_goal_x;        //로봇의 위치와 목표 위치 x 오차를 각각 얼마나 중요하게 볼지
     float weight_goal_y;        //로봇의 위치와 목표 위치 y 오차를 각각 얼마나 중요하게 볼지
-    //float weight_heading;       //로봇이 바라보는 방향과 목표 방향과의 오차를 얼마나 중요하게 볼지
+    float weight_heading;       //로봇이 바라보는 방향과 목표 방향과의 오차를 얼마나 중요하게 볼지
     float weight_obstacle;      //장애물 관련 비용을 얼마나 세게 줄지
 
     float weight_smooth_v;       //전진속도 명령 변화를 얼마나 싫어할지

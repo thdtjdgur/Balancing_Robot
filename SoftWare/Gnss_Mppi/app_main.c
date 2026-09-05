@@ -239,6 +239,24 @@ void app_main(void) {
 
             float MOTOR_V_MIN = 0.10f; // 모터가 꿈쩍하기 시작하는 최소 전압
 
+            float MOVE_BOOST_V = 0.0f;   // 전진/후진 정지마찰 보상 전압
+            float TURN_BOOST_V = 0.05f;   // 회전 정지마찰 보상 전압
+
+            if (fabsf(targetvel_vel) > 0.02f) {
+                if (pure_l > 0.0f) pure_l += MOVE_BOOST_V;
+                else if (pure_l < 0.0f) pure_l -= MOVE_BOOST_V;
+
+                if (pure_r > 0.0f) pure_r += MOVE_BOOST_V;
+                else if (pure_r < 0.0f) pure_r -= MOVE_BOOST_V;
+            }
+
+            if (fabsf(target_yaw_diff) > 0.03f) {
+                if (pure_l > 0.0f) pure_l += TURN_BOOST_V;
+                else if (pure_l < 0.0f) pure_l -= TURN_BOOST_V;
+
+                if (pure_r > 0.0f) pure_r += TURN_BOOST_V;
+                else if (pure_r < 0.0f) pure_r -= TURN_BOOST_V;
+            }
 
             static int hold_sign_l = 0;
             static int hold_sign_r = 0;
@@ -247,7 +265,9 @@ void app_main(void) {
             float CMD_ON  = 0.005f;
             float CMD_OFF = 0.001f;
 
-            if (fabsf(targetvel_vel) < 0.02f && fabsf(current_vel) < 0.03f) {
+            if (fabsf(targetvel_vel) < 0.02f &&
+                fabsf(target_yaw_diff) < 0.03f &&
+                fabsf(current_vel) < 0.03f) {
 
                 if (pure_l > CMD_ON) hold_sign_l = 1;
                 else if (pure_l < -CMD_ON) hold_sign_l = -1;

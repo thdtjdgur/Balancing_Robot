@@ -14,6 +14,7 @@
 #include "lora.h"
 #include "rtk_bridge.h"
 #include "variable.h"
+#include "waypoint.h"
 
 #define TTGO_PACKET_SINGLE        0xA1U
 #define TTGO_PACKET_FRAGMENT      0xA2U
@@ -23,7 +24,7 @@
 #define DRONE_PACKET_ID           0xFEU
 #define DRONE_GPS_MESSAGE         0xF3U
 #define DRONE_GPS_POSITION_COUNT  1U
-#define DRONE_GPS_PACKET_SIZE     23U
+#define DRONE_GPS_PACKET_SIZE     28U
 #define DRONE_TELEMETRY_RAD_SCALE 1000000.0f
 #define TTGO_SINGLE_HEADER_SIZE   2U
 #define TTGO_FRAGMENT_HEADER_SIZE 4U
@@ -271,8 +272,10 @@ static void send_latest_gga_to_ground(void)
     int32_t latitude_scaled;
     int32_t longitude_scaled;
     int32_t psi_scaled;
+    int32_t v_scaled;
     int32_t w_scaled;
     float psi_rad = 0.0f;
+    uint8_t waypoint_target = 0;
     bool heading_valid;
     bool sent;
 
@@ -289,7 +292,15 @@ static void send_latest_gga_to_ground(void)
     longitude_scaled = (int32_t)lroundf(gga.longitude * WAYPOINT_COORD_SCALE);
     heading_valid = RTK_Bridge_GetHeadingRad(&psi_rad);
     psi_scaled = (int32_t)lroundf(psi_rad * DRONE_TELEMETRY_RAD_SCALE);
+    v_scaled = (int32_t)lroundf(targetvel_vel * DRONE_TELEMETRY_RAD_SCALE);
     w_scaled = (int32_t)lroundf(target_yaw_diff * DRONE_TELEMETRY_RAD_SCALE);
+    if (waypoint_is_active()) {
+        int current_index = waypoint_get_current_index();
+        int waypoint_count = waypoint_get_count();
+        if (current_index >= 0 && current_index < waypoint_count) {
+            waypoint_target = (uint8_t)(current_index + 1);
+        }
+    }
 
     packet[0] = DRONE_PACKET_ID;
     packet[1] = gps_sequence++;
@@ -300,8 +311,10 @@ static void send_latest_gga_to_ground(void)
     packet[12] = latest_detected_flag;
     packet[13] = latest_person_count;
     write_i32_le(&packet[14], psi_scaled);
-    write_i32_le(&packet[18], w_scaled);
-    packet[22] = gga.quality;
+    write_i32_le(&packet[18], v_scaled);
+    write_i32_le(&packet[22], w_scaled);
+    packet[26] = gga.quality;
+    packet[27] = waypoint_target;
 
     vTaskDelay(pdMS_TO_TICKS(GPS_RESPONSE_GUARD_MS));
     drain_lora_irq_flags();
@@ -316,27 +329,31 @@ static void send_latest_gga_to_ground(void)
         interval.gps_responses++;
         if (isfinite(gga.differential_age)) {
             ESP_LOGI(TAG,
-                     "[GPS TX] lat=%.8f, lon=%.8f, quality=%u, age=%.2f s, sample_age=%" PRIu32 " ms, det=%u, count=%u, psi=%.4f rad, w=%.4f rad/s, heading_valid=%u",
+                     "[GPS TX] lat=%.8f, lon=%.8f, quality=%u, wp=%u, age=%.2f s, sample_age=%" PRIu32 " ms, det=%u, count=%u, psi=%.4f rad, v=%.4f m/s, w=%.4f rad/s, heading_valid=%u",
                      gga.latitude,
                      gga.longitude,
                      (unsigned)gga.quality,
+                     (unsigned)waypoint_target,
                      gga.differential_age,
                      sample_age_ms,
                      (unsigned)latest_detected_flag,
                      (unsigned)latest_person_count,
                      psi_rad,
+                     targetvel_vel,
                      target_yaw_diff,
                      heading_valid ? 1U : 0U);
         } else {
             ESP_LOGI(TAG,
-                     "[GPS TX] lat=%.8f, lon=%.8f, quality=%u, age=nan, sample_age=%" PRIu32 " ms, det=%u, count=%u, psi=%.4f rad, w=%.4f rad/s, heading_valid=%u",
+                     "[GPS TX] lat=%.8f, lon=%.8f, quality=%u, wp=%u, age=nan, sample_age=%" PRIu32 " ms, det=%u, count=%u, psi=%.4f rad, v=%.4f m/s, w=%.4f rad/s, heading_valid=%u",
                      gga.latitude,
                      gga.longitude,
                      (unsigned)gga.quality,
+                     (unsigned)waypoint_target,
                      sample_age_ms,
                      (unsigned)latest_detected_flag,
                      (unsigned)latest_person_count,
                      psi_rad,
+                     targetvel_vel,
                      target_yaw_diff,
                      heading_valid ? 1U : 0U);
         }
@@ -799,7 +816,7 @@ void init_lorartk(void)
              "[RADIO] SX1276 version=0x%02X, 922.1 MHz, SF7, BW125, CR4/5, Explicit, CRC ON",
              lora_read(0x42));
     ESP_LOGI(TAG,
-             "[PACKET] A1=[type,seq,RTCM], A2=[type,seq,index,count,data], A3=DOWNLINK_END, Waypoint=[FF,F2,count,lat/lon...], uplink=[FE,seq,F3,1,lat,lon,det,count,psi,w,quality]");
+             "[PACKET] A1=[type,seq,RTCM], A2=[type,seq,index,count,data], A3=DOWNLINK_END, Waypoint=[FF,F2,count,lat/lon...], uplink=[FE,seq,F3,1,lat,lon,det,count,psi,v,w,quality]");
     ESP_LOGI(TAG, "[UART] UM982 ESP_TX=%d ESP_RX=%d, %d 8N1; USB debug 115200",
              UM982_TX_PIN, UM982_RX_PIN, UM982_BAUD_RATE);
     ESP_LOGI(TAG, "[GNSS] Expected GGA=%u Hz, RX buffer=4096 bytes",

@@ -90,9 +90,9 @@ void parse_lidar_packet(uint8_t *buf, int len) {
         distance_map[angle_idx] = dist_mm;
 
         // 0도(정면) 데이터 출력
-        if (angle_idx == 0) {
-            esp_rom_printf("정면(0도) 거리: %d mm\n", (int)dist_mm);
-        }
+        // if (angle_idx == 270) {
+        //     esp_rom_printf("정면(0도) 거리: %d mm\n", (int)dist_mm);
+        // }
     }
 }
 

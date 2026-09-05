@@ -27,7 +27,7 @@
 
 // If dual antennas are mounted left/right, set this to +90.0f or -90.0f
 // after checking whether the UM982 heading vector points left or right.
-#define GNSS_HEADING_OFFSET_DEG 42.0f
+#define GNSS_HEADING_OFFSET_DEG -48.0f
 
 static const char *TAG = "RTK_BRIDGE";
 #define RTK_MISC_LOG_ENABLED 0

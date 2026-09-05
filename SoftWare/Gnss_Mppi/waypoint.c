@@ -3,8 +3,10 @@
 #include "gnss.h"
 #include "variable.h"
 
-#define WAYPOINT_REACH_RADIUS_M 1.0f //100cm이내로 들어오면 웨이포인트에 도착한걸로 간주
+#define WAYPOINT_REACH_RADIUS_M 4.0f //100cm이내로 들어오면 웨이포인트에 도착한걸로 간주
 #define WAYPOINT_REACH_CONFIRM_COUNT 1
+#undef WAYPOINT_REACH_RADIUS_M
+#define WAYPOINT_REACH_RADIUS_M 4.0f // 4m 안으로 들어오면 웨이포인트 도착으로 판단
 
 typedef struct {
     float x;

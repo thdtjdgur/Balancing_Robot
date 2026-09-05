@@ -114,8 +114,8 @@ static void sample_input_sequence_from_base(MPPI_Input *dst,
                                             const MPPI_Input *base,
                                             int horizon)
 {
-    float v_amp = sequence_initialized ? 0.08f : 0.30f;
-    float w_amp = sequence_initialized ? 0.25f : 0.80f;
+    float v_amp = sequence_initialized ? 0.28f : 0.50f;
+    float w_amp = sequence_initialized ? 0.25f : 0.90f;
     //처음 실행할때 정지 시퀸스 주변만 보지 말고 좀 더 넓게 탐색
 
     float noise_v = rand_symmetric(v_amp);
@@ -153,6 +153,7 @@ static float evaluate_input_sequence(const MPPI_State *start_state,
         pred_state = predict_next_state(&pred_state, &sequence[t]);
 
         total_cost += calc_goal_cost(&pred_state);
+        total_cost += calc_heading_cost(&pred_state);
         total_cost += calc_sector_obstacle_cost(&pred_state, start_state);
         total_cost += calc_input_cost(&sequence[t]);
         total_cost += calc_smooth_cost(&sequence[t], &prev_input);
@@ -323,13 +324,13 @@ float wrap_to_pi(float angle)
 void init_MPPI(void)
 {
     //기본값 세팅
-    mppi_params.weight_goal_x = 1.5f;
-    mppi_params.weight_goal_y = 1.5f;
-    //mppi_params.weight_heading = 0.5f;
-    mppi_params.weight_obstacle = 100.0f;
+    mppi_params.weight_goal_x = 10.5f;
+    mppi_params.weight_goal_y = 10.5f;
+    mppi_params.weight_heading = 0.7f;
+    mppi_params.weight_obstacle = 150.0f;
 
-    mppi_params.weight_smooth_v = 0.3f;
-    mppi_params.weight_smooth_w = 0.3f;
+    mppi_params.weight_smooth_v = 0.35f;//0.15
+    mppi_params.weight_smooth_w = 0.35f;//0.15f
 
     mppi_params.weight_input_v = 0.1f;
     mppi_params.weight_input_w = 0.1f;
@@ -345,7 +346,7 @@ void init_MPPI(void)
 
     mppi_params.lambda = 10.0f;
 
-    mppi_params.obs_safe_dist = 0.5f; //0.5m
+    mppi_params.obs_safe_dist = 2.0f; //0.5m
 
     ESP_LOGI(TAG, "MPPI initialized");
 }

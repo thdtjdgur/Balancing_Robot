@@ -27,7 +27,7 @@ float calc_goal_cost(const MPPI_State *state)
 }
 
 
-/*
+
 // 목표점 방향을 제대로 바라보고 있는지 비용 계산
 // 현재 위치에서 목표 위치를 향하는 각도를 psi_ref로 만들고,
 // 현재 heading과의 차이를 제곱해서 비용으로 사용
@@ -40,7 +40,7 @@ float calc_heading_cost(const MPPI_State *state)
 
     return mppi_params.weight_heading * error_heading * error_heading;
 }
-*/
+
 
 
 //현재 로봇 위치에서 360도 라이다 거리맵을 24개 섹터의 대표 최소거리로 압축
@@ -70,7 +70,7 @@ void build_lidar_sectors(void)
         if (dist_m < sector_distance_m[sector_idx]) {
             sector_distance_m[sector_idx] = dist_m;
             //한 섹터 안의 여러 점들 중 가장 가까운 장애물까지의 거리값이 sector_distance_m[sector_idx](섹터 대표 거리값)에 저장됨
-            sector_closest_angle_rad[sector_idx] = angle_deg * M_PI / 180.0f;
+            sector_closest_angle_rad[sector_idx] = -angle_deg * M_PI / 180.0f;
             //가장 가까운 장애물이 위치한 각도를 sector_closest_angle_rad[sector_idx]에 저장
         }
     }
