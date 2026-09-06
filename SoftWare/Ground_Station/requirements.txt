@@ -1,0 +1,6 @@
+customtkinter
+tkintermapview
+opencv-python
+Pillow
+matplotlib
+pyserial
