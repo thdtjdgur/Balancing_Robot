@@ -245,13 +245,26 @@ static void compute_weighted_sequence(MPPI_Input *out_sequence,
 static MPPI_State get_current_state(void)
 {
     MPPI_State state;
-    float heading_rad = current_yaw;
 
+
+    static float filtered_heading_rad = 0.0f;
+    static int heading_filter_initialized = 0;
+
+    float heading_rad = current_yaw;
     (void)RTK_Bridge_GetHeadingRad(&heading_rad);
+
+    if (!heading_filter_initialized) {
+        filtered_heading_rad = heading_rad;
+        heading_filter_initialized = 1;
+    } else {
+        float heading_error = wrap_to_pi(heading_rad - filtered_heading_rad);
+        filtered_heading_rad = wrap_to_pi(filtered_heading_rad + 0.6f * heading_error);
+    }
+
 
     state.x = gnss_x;         // 현재 로봇의 로컬 x 위치 [m]
     state.y = gnss_y;         // 현재 로봇의 로컬 y 위치 [m]
-    state.psi = heading_rad;  // UM982 dual-antenna heading [rad]
+    state.psi = filtered_heading_rad;  // UM982 dual-antenna heading [rad]
     state.v = current_vel;    // 현재 로봇 전진속도 [m/s]
     state.w = gyro;           // 현재 로봇 회전속도 [rad/s]
 
@@ -324,16 +337,16 @@ float wrap_to_pi(float angle)
 void init_MPPI(void)
 {
     //기본값 세팅
-    mppi_params.weight_goal_x = 10.5f;
-    mppi_params.weight_goal_y = 10.5f;
-    mppi_params.weight_heading = 0.7f;
+    mppi_params.weight_goal_x = 10.5f;//10.5f
+    mppi_params.weight_goal_y = 10.5f;//10.5f
+    mppi_params.weight_heading = 6.0f;//5.0f
     mppi_params.weight_obstacle = 150.0f;
 
-    mppi_params.weight_smooth_v = 0.35f;//0.15
-    mppi_params.weight_smooth_w = 0.35f;//0.15f
+    mppi_params.weight_smooth_v = 0.35f;//0.35f
+    mppi_params.weight_smooth_w = 0.35f;//0.35f
 
-    mppi_params.weight_input_v = 0.1f;
-    mppi_params.weight_input_w = 0.1f;
+    mppi_params.weight_input_v = 0.1f;//0.1f
+    mppi_params.weight_input_w = 0.1f;//0.1f 
 
     mppi_params.dt = 0.1f;
     mppi_params.horizon = 15;//15샘플 앞을 관찰
@@ -346,7 +359,7 @@ void init_MPPI(void)
 
     mppi_params.lambda = 10.0f;
 
-    mppi_params.obs_safe_dist = 2.0f; //0.5m
+    mppi_params.obs_safe_dist = 1.5f; //0.5m
 
     ESP_LOGI(TAG, "MPPI initialized");
 }
