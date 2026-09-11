@@ -276,6 +276,10 @@ HILS 이후에는 실물 로봇으로 외란 복귀, 위치 유지, 블루투스
   <img src="docs/images/sim_robot.png" alt="simulation robot" width="45%" />
 </p>
 
+<p align="center">
+  <img src="docs/images/assembly.png" alt="SolidWorks assembly render" width="70%" />
+</p>
+
 실물 테스트에서 중점적으로 보는 항목은 다음과 같다.
 
 - 외부에서 밀었을 때 로봇이 다시 자세를 회복하는지 확인한다.
