@@ -171,6 +171,8 @@ targetvel_vel
 
 SILS에서는 실제 하드웨어 없이 제어 응답을 먼저 본다. 응답이 발산하는지, 목표 속도나 외란에 대해 로봇 자세가 다시 안정되는지 확인한다.
 
+[Simulink 원본 모델과 실행 안내](SoftWare/Simulink/)에서 `untitled.slx`를 내려받아 MATLAB/Simulink R2025b로 열 수 있다.
+
 <p align="center">
   <img src="docs/images/sils_test.png" alt="SILS test result" width="70%" />
 </p>
@@ -347,6 +349,7 @@ GitHub README에서는 mp4가 항상 바로 재생되지 않기 때문에 영상
 - `SoftWare/Gnss_Mppi/`: GNSS 웨이포인트, 24섹터 라이다 장애물, MPPI 명령 생성이 포함된 펌웨어 변형이다.
 - `SoftWare/Mppi_matlab_simulation/`: ESP32 MPPI 적용 전 MATLAB에서 명령 생성 로직을 검증한 코드이다.
 - `SoftWare/hils_test_code/`: MATLAB/Simulink HILS 검증용 ESP-IDF 프로젝트이다.
+- `SoftWare/Simulink/untitled.slx`: 물리 모델과 제어·HILS 통신 블록을 담은 Simulink 원본 모델이다. [모델 열기와 포트 설정](SoftWare/Simulink/README.md)을 함께 확인한다.
 
 ---
 

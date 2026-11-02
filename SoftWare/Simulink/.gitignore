@@ -1,0 +1,8 @@
+# Simulink regenerates these caches and build outputs locally.
+slprj/
+*_ert_rtw/
+*_grt_rtw/
+*.slxc
+*.slx.original
+*.slx.autosave
+*.slx.bak
